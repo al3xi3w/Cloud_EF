@@ -135,8 +135,12 @@ function pageDiagramas(id) {
   <h2>1. Dibújalo en papel</h2>
   <p>Toma 10–15 minutos y sigue el <a href="#/diagramas">método</a>. ¿Te trabaste? Abre las pistas una por una:</p>
   ${cs.pistas.map((p, i) => `<details><summary>Pista ${i + 1}</summary>${p}</details>`).join('')}
-  <h2>2. Marca los servicios que usaste</h2>
-  <div class="card" id="pick"></div>
+  <h2>2. Ármalo en el editor y corrígelo</h2>
+  <p>Agrega servicios, conéctalos con <b>➜ Conectar</b>, rotula las flechas y presiona <b>Corregir</b>. Tu diagrama se guarda en este navegador.</p>
+  <div id="ed"></div>
+  <div class="row" style="margin:10px 0"><button class="btn" id="corr">✔ Corregir mi diagrama</button><a class="btn ghost" href="#/editor/${cs.id}" style="text-decoration:none">Abrir en pantalla completa</a></div>
+  <div id="gr"></div>
+  <details><summary>¿Lo dibujaste en papel? Marca solo los servicios que usaste</summary><div id="pick"></div></details>
   <h2>3. Compara con la solución</h2>
   <button class="btn" id="sol">Mostrar solución</button>
   <div id="solbox" hidden>
@@ -148,7 +152,32 @@ function pageDiagramas(id) {
     <div class="card">${['Identifiqué a todos los actores y fuentes de datos', 'Usé entrada síncrona (API Gateway) o streaming (Kinesis) según corresponde', 'Separé archivos (S3) de registros (BD) y justifiqué SQL vs NoSQL', 'Desacoplé con eventos o colas lo que no tiene que ser inmediato', 'Notifico a las personas que el enunciado menciona', 'Incluí monitoreo (CloudWatch)', 'Rotulé las flechas y justifiqué cada servicio', 'Si hay varias empresas o sedes, indiqué el patrón multi-tenant'].map(t => `<label style="display:block"><input type="checkbox"> ${t}</label>`).join('')}</div>
   </div>`;
   Quiz.picker($('#pick'), cs);
+  const ed = Editor.mount($('#ed'), { caseId: cs.id });
+  $('#corr').addEventListener('click', () => { $('#gr').innerHTML = Editor.renderGrade(ed.grade()); });
   $('#sol').addEventListener('click', () => { $('#solbox').hidden = false; $('#sol').remove(); });
+}
+
+/* ───── Editor ───── */
+function pageEditor(id) {
+  const cs = CASES.find(c => c.id === id);
+  app.innerHTML = `<h1>Editor de diagramas</h1>
+  <p class="lead">Arma tu arquitectura de solución y el editor la corrige: revisa <b>servicios clave</b>, <b>conexiones esperadas</b> y <b>buenas prácticas de clase</b>, cada una con su diapositiva.</p>
+  <div class="chips"><a class="chip ${!cs ? 'on' : ''}" href="#/editor" style="text-decoration:none">Modo libre</a>${CASES.map(c => `<a class="chip ${cs === c ? 'on' : ''}" href="#/editor/${c.id}" style="text-decoration:none">${c.title}</a>`).join('')}</div>
+  ${cs ? `<div class="card"><b>Enunciado:</b> ${cs.enunciado}</div>` : `<div class="card">En <b>modo libre</b> no hay solución de referencia: se revisan solo las buenas prácticas de clase. Úsalo para practicar con tus propios enunciados, por ejemplo una pregunta de examen.</div>`}
+  <details class="card" style="padding:8px 14px"><summary>Cómo usar el editor</summary><ul>
+    <li>Haz clic en un servicio de la paleta para agregarlo. Con <b>+ Actor</b> agregas personas o dispositivos (paciente, sensor, tablet…).</li>
+    <li><b>✋ Mover</b>: arrastra los nodos. <b>Doble clic</b> para renombrarlos (ej. “Lambda registrarCaso”).</li>
+    <li><b>➜ Conectar</b>: clic en el origen y luego en el destino. Te pide la etiqueta de la flecha (POST, evento X, guarda…).</li>
+    <li>Para borrar, selecciona y usa <b>🗑 Borrar</b> o la tecla Supr. Todo se guarda automáticamente en este navegador.</li></ul></details>
+  <div id="ed"></div>
+  <div class="row" style="margin:10px 0"><button class="btn" id="corr">✔ Corregir</button>${cs ? '<button class="btn ghost" id="sol">Ver solución de referencia</button>' : ''}</div>
+  <div id="gr"></div><div id="solbox"></div>`;
+  const ed = Editor.mount($('#ed'), { caseId: cs ? cs.id : null });
+  $('#corr').addEventListener('click', () => { $('#gr').innerHTML = Editor.renderGrade(ed.grade()); $('#gr').scrollIntoView({ behavior: 'smooth' }); });
+  if (cs) $('#sol').addEventListener('click', () => {
+    $('#solbox').innerHTML = `<h2>Solución de referencia</h2>${Diagram.legend()}${Diagram.render(cs.diagram)}<ol class="steps">${cs.explica.map(e => `<li>${e}</li>`).join('')}</ol>${cs.notas.map(n => `<div class="note">${n}</div>`).join('')}`;
+    $('#sol').remove();
+  });
 }
 
 /* ───── Práctica ───── */
@@ -180,7 +209,7 @@ function pageSimulacros(id) {
   const ex = EXAMS.find(e => e.id === id), b = best();
   if (!ex) {
     app.innerHTML = `<h1>Simulacros de examen</h1>
-    <p class="lead">Cada simulacro tiene 3 partes: <b>opción múltiple</b> (se corrige sola), <b>preguntas abiertas</b> (te autoevalúas con la respuesta modelo) y un <b>diagrama de arquitectura</b> (lo dibujas en papel y marcas los servicios). Las preguntas no se repiten entre simulacros.</p>
+    <p class="lead">Cada simulacro tiene 3 partes: <b>opción múltiple</b> (se corrige sola), <b>preguntas abiertas</b> (te autoevalúas con la respuesta modelo) y un <b>diagrama de arquitectura</b> que armas en el editor y se corrige solo. Las preguntas no se repiten entre simulacros.</p>
     <div class="note">Son exámenes de práctica <b>armados con el contenido de clase</b>, no exámenes pasados reales: en <code>Clases/</code> no hay exámenes anteriores del curso.</div>
     <div class="grid">${EXAMS.map(e => { const c = CASES.find(x => x.id === e.case); return `<a class="tile" href="#/simulacros/${e.id}"><span class="wk">${e.min} min · ${e.mcq.length} MC + ${e.open.length} abiertas + 1 diagrama</span><b>${e.title}</b><span>Diagrama: ${c.title}. Mejor nota: ${b[e.id] != null ? b[e.id] + '%' : '—'}</span></a>`; }).join('')}</div>`;
     return;
@@ -192,15 +221,15 @@ function pageSimulacros(id) {
   <h2>Parte A · Opción múltiple</h2><div id="pa"></div>
   <h2>Parte B · Preguntas abiertas</h2><div id="pb"></div>
   <h2>Parte C · Diagrama de arquitectura de solución</h2>
-  <div class="card"><b>Enunciado:</b> ${cs.enunciado}<br><br>Dibuja en papel la arquitectura de solución en AWS. Rotula las flechas y justifica cada servicio en una línea. Después marca abajo los servicios que usaste.</div>
-  <div class="card" id="pc"></div>
+  <div class="card"><b>Enunciado:</b> ${cs.enunciado}<br><br>Arma la arquitectura de solución en AWS en el editor. Rotula las flechas. Se corrige al terminar el examen.</div>
+  <div id="pc"></div>
   <div class="row" style="margin:20px 0"><button class="btn" id="fin">Terminar y corregir</button></div>
   <div id="res"></div>`;
   const A = Quiz.mcq($('#pa'), ex.mcq, 'exam');
   const B = Quiz.open($('#pb'), ex.open, { label: 'Abierta' });
   $('#pb').querySelectorAll('.show').forEach(x => x.remove());
-  const C = Quiz.picker($('#pc'), cs);
-  $('#pc').querySelector('.chk').remove();
+  Store.set('ed:exam-' + ex.id, null);
+  const C = Editor.mount($('#pc'), { caseId: cs.id, key: 'exam-' + ex.id });
   let left = ex.min * 60;
   const tick = () => { const m = Math.floor(left / 60), s = left % 60; $('#tm').textContent = `⏱ ${m}:${String(s).padStart(2, '0')}`; if (left-- <= 0) { clearInterval(timerId); finish(); } };
   tick(); timerId = setInterval(tick, 1000);
@@ -209,16 +238,16 @@ function pageSimulacros(id) {
     $('#fin').remove();
     const a = A.grade();
     B.revealAll();
-    C.check();
-    const c = C.score();
-    $('#res').innerHTML = `<div class="card"><div class="score">Parte A: ${a.ok} / ${a.total} · Parte C (servicios clave): ${c} / ${cs.req.length}</div>
+    const g = C.grade();
+    $('#res').innerHTML = `<div class="card"><div class="score">Parte A: ${a.ok} / ${a.total} · Parte C (diagrama): ${g.pct}%</div>
+      <h3>Corrección del diagrama</h3>${Editor.renderGrade(g)}
       <p>Para la Parte B, marca tu autoevaluación en cada pregunta (Completa / Parcial / No la sabía) y presiona “Calcular nota final”.</p>
       <button class="btn" id="calc">Calcular nota final</button><div id="final"></div>
       <h3>Solución del diagrama</h3>${Diagram.legend()}${Diagram.render(cs.diagram)}<ol class="steps">${cs.explica.map(e => `<li>${e}</li>`).join('')}</ol>${cs.notas.map(n => `<div class="note">${n}</div>`).join('')}</div>`;
     $('#calc').addEventListener('click', () => {
       const self = B.selfScore();
       if (self.some(v => v == null)) { $('#final').innerHTML = '<p class="badc">Te falta autoevaluar alguna pregunta abierta.</p>'; return; }
-      const pct = Math.round(60 * a.ok / a.total + 20 * self.reduce((x, y) => x + y, 0) / (2 * self.length) + 20 * c / cs.req.length);
+      const pct = Math.round(60 * a.ok / a.total + 20 * self.reduce((x, y) => x + y, 0) / (2 * self.length) + 20 * g.pct / 100);
       const bb = best(); if (bb[ex.id] == null || pct > bb[ex.id]) { bb[ex.id] = pct; Store.set('best', bb); }
       $('#final').innerHTML = `<p class="score">Nota estimada: ${pct}% (≈ ${(pct / 5).toFixed(1)} / 20)</p>`;
     });
@@ -232,7 +261,7 @@ function route() {
   const [, page = 'inicio', a, b] = (location.hash || '#/inicio').split('/');
   document.querySelectorAll('#nav a').forEach(x => x.classList.toggle('on', x.dataset.r === page));
   if (page !== 'simulacros') clearInterval(timerId);
-  ({ inicio: pageInicio, aprende: () => pageAprende(a), servicios: pageServicios, diagramas: () => pageDiagramas(a), practica: () => pagePractica(a, b), simulacros: () => pageSimulacros(a) }[page] || pageInicio)();
+  ({ inicio: pageInicio, aprende: () => pageAprende(a), servicios: pageServicios, diagramas: () => pageDiagramas(a), editor: () => pageEditor(a),practica: () => pagePractica(a, b), simulacros: () => pageSimulacros(a) }[page] || pageInicio)();
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);

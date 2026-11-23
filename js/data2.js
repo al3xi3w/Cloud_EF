@@ -228,3 +228,70 @@ const EXAMS = [0, 1, 2].map(k => ({
   ][k].map(OPEN_IDX),
   case: ['clinica', 'iot', 'asistencia'][k],
 }));
+
+/* ───────────── CORRECCIÓN DEL EDITOR DE DIAGRAMAS ─────────────
+   conn: conexiones esperadas entre TIPOS de nodo ('actor' = persona/dispositivo).
+     f/t: tipos aceptados en el origen/destino · min: cuántas flechas así se esperan (crédito parcial)
+   text: algo que debe aparecer escrito en alguna etiqueta (nodo o flecha) */
+const GRADING = {
+  clinica: { conn: [
+    { f:['actor'], t:['apigw'], why:'El paciente y el doctor entran por API Gateway (petición REST que espera respuesta).', src:'SV p.21, p.23' },
+    { f:['apigw'], t:['lambda'], why:'API Gateway dispara una Lambda con la lógica (registrar caso, consultar estado, tomar el siguiente).', src:'SV p.15' },
+    { f:['lambda'], t:['s3'], why:'Las fotos y tomografías son archivos: van a S3 (almacenamiento de objetos).', src:'SV p.13' },
+    { f:['lambda'], t:['dynamodb','aurora'], why:'El caso (estado, prioridad, fecha de llegada) se guarda en una base de datos.', src:'SV p.13' },
+    { f:['lambda'], t:['eventbridge','sns','sqs'], why:'Al registrar el caso se publica un evento o se encola: el paciente no espera al doctor (asíncrono).', src:'EV p.15' },
+    { f:['eventbridge','sns','lambda'], t:['sqs'], min:3, why:'Una cola por prioridad (emergencia, media, baja): cada cola respeta el orden de llegada. EventBridge filtra por el campo prioridad.', src:'EV p.12, p.15 · decisión de diseño' },
+    { f:['sqs'], t:['lambda'], why:'Una Lambda del doctor consume las colas (primero emergencia).', src:'EV p.15' },
+    { f:['lambda','cloudwatch'], t:['sns'], why:'Cuando cambia el estado se publica en SNS para notificar.', src:'EV p.22' },
+    { f:['sns'], t:['actor'], why:'SNS avisa al paciente por email/SMS (aplicación a persona).', src:'SV p.12 · EV p.22' },
+  ]},
+  iot: { conn: [
+    { f:['actor'], t:['kinesis'], why:'Los sensores mandan un stream continuo → Kinesis (telemetría IoT).', src:'SV p.20, p.22' },
+    { f:['kinesis'], t:['lambda'], why:'Kinesis dispara la Lambda que procesa cada lectura.', src:'SV p.20, p.22' },
+    { f:['lambda'], t:['dynamodb'], why:'Las lecturas se guardan en NoSQL (IoT es caso de NoSQL: volumen y velocidad).', src:'BD p.15–16' },
+    { f:['lambda','cloudwatch'], t:['sns'], why:'Si se supera el umbral se publica la alerta en un tema SNS.', src:'EV p.12 · MO p.10' },
+    { f:['sns'], t:['actor'], min:3, why:'Pub/sub fan out: un mensaje a conductor, operaciones y cliente.', src:'EV p.20' },
+    { f:['actor'], t:['apigw'], why:'El cliente consulta su pedido por API Gateway (síncrono).', src:'SV p.21' },
+    { f:['apigw'], t:['lambda'], why:'API Gateway dispara la Lambda que lee el estado del pedido.', src:'SV p.21' },
+  ], text: [
+    { re:/umbral|5\s*min/i, why:'Escribe la condición “umbral en los últimos 5 min” en alguna etiqueta.', src:'enunciado' },
+  ]},
+  asistencia: { conn: [
+    { f:['actor'], t:['apigw'], why:'La tablet envía la foto por API Gateway.', src:'SV p.23' },
+    { f:['apigw'], t:['lambda'], why:'API Gateway dispara la Lambda que registra la asistencia.', src:'SV p.15' },
+    { f:['lambda'], t:['s3'], why:'La foto es un archivo → S3.', src:'SV p.13, p.19' },
+    { f:['lambda'], t:['rekognition'], why:'Rekognition es el servicio de ML de clase para analizar imágenes.', src:'SV p.18' },
+    { f:['lambda'], t:['dynamodb','aurora'], why:'El registro de asistencia va a una base de datos.', src:'SV p.13' },
+  ], text: [
+    { re:/tenant|sede/i, why:'Indica el tenant (sede / TENANT_ID) en alguna etiqueta: el enunciado pide multi-tenancy.', src:'MT p.12–14' },
+  ]},
+  tienda: { conn: [
+    { f:['lambda','actor'], t:['eventbridge','sns'], why:'El Servicio de Pedidos (productor) publica PedidoCreado en el bus.', src:'EV p.8' },
+    { f:['eventbridge','sns'], t:['lambda','sqs'], min:3, why:'El bus entrega el evento a 3 consumidores: inventario, notificaciones y analítica.', src:'EV p.8' },
+  ]},
+  todo: { conn: [
+    { f:['actor'], t:['amplify'], why:'Amplify aloja el contenido estático.', src:'SV p.15' },
+    { f:['actor'], t:['apigw'], why:'Los dispositivos llaman a la ToDo API (API Gateway).', src:'SV p.15' },
+    { f:['apigw'], t:['lambda'], min:4, why:'Una Lambda por operación (addTodo, completeTodo, deleteTodo, getAllTodo, getTodo, updateTodo).', src:'SV p.15' },
+    { f:['lambda'], t:['dynamodb'], why:'Las Lambdas leen/escriben la Items Table en DynamoDB.', src:'SV p.15' },
+  ]},
+  markdown: { conn: [
+    { f:['actor'], t:['s3'], why:'Las notas en Markdown se suben a S3.', src:'SV p.16' },
+    { f:['s3'], t:['sns'], why:'El evento “new object created” de S3 va a SNS.', src:'SV p.16' },
+    { f:['sns'], t:['sqs'], min:2, why:'SNS + SQS fan out: una cola para conversión y otra para sentimiento.', src:'SV p.16 · EV p.21' },
+    { f:['sqs'], t:['lambda'], min:2, why:'Cada cola dispara su Lambda.', src:'SV p.16' },
+    { f:['lambda'], t:['comprehend'], why:'Comprehend analiza el sentimiento.', src:'SV p.16' },
+    { f:['lambda'], t:['dynamodb'], why:'El sentimiento se guarda en DynamoDB.', src:'SV p.16' },
+    { f:['lambda'], t:['s3'], why:'El HTML convertido se guarda en el Output S3 Bucket.', src:'SV p.16' },
+    { f:['lambda','sqs'], t:['dlq'], why:'Si la Lambda falla, el mensaje va a la Dead Letter Queue.', src:'SV p.16' },
+    { f:['dlq'], t:['cloudwatch'], why:'Alarma de CloudWatch “DLQ has messages”.', src:'SV p.16' },
+    { f:['cloudwatch'], t:['sns'], why:'La alarma envía un email por SNS.', src:'SV p.16' },
+  ]},
+  batch: { conn: [
+    { f:['eventbridge'], t:['stepfunctions','lambda'], why:'Una regla de EventBridge lanza el flujo de forma recurrente.', src:'SV p.17' },
+    { f:['stepfunctions'], t:['lambda'], why:'Step Functions orquesta las Lambdas del ETL.', src:'SV p.17' },
+    { f:['lambda'], t:['s3'], why:'Los datos, resultados intermedios y finales están en S3.', src:'SV p.17' },
+    { f:['stepfunctions','lambda'], t:['sns'], why:'Al terminar, se notifica con SNS.', src:'SV p.17' },
+    { f:['sns'], t:['actor'], why:'Email de notificación.', src:'SV p.17' },
+  ]},
+};

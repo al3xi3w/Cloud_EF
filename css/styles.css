@@ -101,3 +101,19 @@ ol.steps li{margin:6px 0}
 .good{color:var(--ok);font-weight:600}.badc{color:var(--bad);font-weight:600}
 .sidebar>*,.two>*,.grid>*{min-width:0}
 code{overflow-wrap:anywhere}
+/* editor de diagramas */
+.ed{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ed-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button,.eb{background:transparent;color:var(--ink);border:0;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.eb{border:1px solid var(--line);border-radius:8px}
+.eb:disabled{opacity:.4;cursor:default}
+.ed-hint{color:var(--muted);font-size:13px;margin-left:auto}
+.ed-pal{padding:6px 12px;border-bottom:1px solid var(--line);max-height:190px;overflow-y:auto}
+.ed-pal .chips{margin:2px 0 6px}
+.ed-pal .chip{font-size:13px;padding:3px 10px}
+.ed-wrap{overflow:auto;background:var(--bg)}
+.ed-svg{display:block;width:100%;min-width:760px;user-select:none;-webkit-user-select:none}
+.glist{list-style:none;padding-left:0}
+.glist li{margin:6px 0}
