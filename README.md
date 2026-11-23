@@ -10,6 +10,8 @@ Web de estudio para el **Examen Final de CS2032 Cloud Computing**, hecha solo co
 - **Práctica**: 69 preguntas de opción múltiple y las 21 preguntas de cierre del profesor, con respuesta modelo.
 - **Simulacros**: 3 exámenes con tiempo (opción múltiple, preguntas abiertas y un diagrama).
 
+- **Chat de IA** (botón 💬 en todas las páginas): responde preguntas con el material de clase, cita la diapositiva y puede revisar el diagrama que armaste en el editor. Usa Claude (`claude-opus-5-5`) con **tu propia clave de API de Anthropic**, que se guarda solo en tu navegador; el repositorio no contiene ninguna clave. Cada pregunta se cobra a esa cuenta. Se desactiva durante los simulacros.
+
 Lo que no sale de las diapositivas está marcado como *fuera de las diapositivas* o *decisión de diseño*.
 
 ## Uso
