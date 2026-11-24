@@ -276,11 +276,10 @@ $('#theme').addEventListener('click', () => {
   document.documentElement.dataset.theme = dark ? 'light' : 'dark';
   Store.set('theme', document.documentElement.dataset.theme);
 });
-route();
 
 /* ───── Casos tipo examen ───── */
 function xEnunciado(cs) {
-  return `<div class="card"><span class="tag">${cs.kind === 'ejemplo' ? 'Ejemplo resuelto' : 'Práctica'} · ${cs.pts} puntos</span>
+  return `<div class="card"><span class="tag">${KLABEL[cs.kind]} · ${cs.pts} puntos</span>
     <p><b>${cs.title}</b></p><p>${cs.enunciado}</p>
     <p><b>Requerimientos:</b></p><ul>${cs.requisitos.map(r => `<li>${r}</li>`).join('')}</ul>
     <p><b>Se pide:</b> ${cs.sepide}</p></div>`;
@@ -294,18 +293,22 @@ function xSolucion(cs) {
     ${cs.ddb.length ? `<h3>Tablas de DynamoDB</h3><div class="tablewrap"><table><tr><th>Tabla</th><th>PK</th><th>SK</th><th>Atributos</th><th>Patrón de acceso</th></tr>${cs.ddb.map(t => `<tr><td><b>${t.tabla}</b></td><td><code>${t.pk}</code></td><td><code>${t.sk}</code></td><td>${t.attrs}</td><td>${t.uso}</td></tr>`).join('')}</table></div>` : ''}
     ${cs.notas.map(n => `<div class="note">${n}</div>`).join('')}`;
 }
+const KLABEL = { ejemplo: 'Ejemplo resuelto', practica: 'Práctica', real: 'Examen Final real' };
 function pageExamen(id) {
+  if (id === 'final') return pageExamenFinal();
   const cs = XCASES.find(c => c.id === id);
   if (!cs) {
-    const tile = c => `<a class="tile" href="#/examen/${c.id}"><span class="wk">${c.kind === 'ejemplo' ? 'Ejemplo resuelto' : 'Práctica'} · ${c.pts} pts</span><b>${c.title}</b><span>${c.enunciado.replace(/<[^>]+>/g, '').slice(0, 130)}…</span></a>`;
+    const tile = c => `<a class="tile" href="#/examen/${c.id}"><span class="wk">${KLABEL[c.kind]} · ${c.pts} pts</span><b>${c.title}</b><span>${c.enunciado.replace(/<[^>]+>/g, '').slice(0, 130)}…</span></a>`;
     app.innerHTML = `<h1>Casos tipo examen</h1>
     <p class="lead">Problemas con el formato del examen: un enunciado de negocio, requerimientos no funcionales y “se pide el diagrama 100% AWS con VPC, subnets, endpoints, NAT, conexión on-premise y tablas PK/SK”.</p>
     <div class="note"><span class="tag warn">fuera de las diapositivas</span> VPC, subnets, NAT, VPC Endpoints, VPN y Direct Connect, Secrets Manager, KMS, ALB, ECS y EC2, el patrón Saga, la idempotencia y el diseño PK/SK <b>no están en <code>Clases/</code></b>. Es conocimiento general de AWS, agregado porque el examen lo pide. Revisa estas soluciones con criterio y con tu profesor.</div>
     <h2>1. Conceptos que necesitas para estos problemas</h2>
     ${CONCEPTS.map(c => `<details><summary>${c.t}</summary>${c.h}</details>`).join('')}
-    <h2>2. Ejemplos resueltos</h2><p>Lee el enunciado, intenta el diagrama y luego compáralo con la solución completa.</p>
+    <h2>2. Examen Final real (Prof. Santiago Silva)</h2><p>Las 3 preguntas del examen. La 1 está resuelta como ejemplo; la 2 y la 3 tienen la solución oculta hasta que la pidas.</p>
+    <div class="grid">${XCASES.filter(c => c.real).sort((a, b) => a.real - b.real).map(tile).join('')}<a class="tile" href="#/examen/final" style="border-color:var(--accent)"><span class="wk">Simulacro · ${EXAMEN_REAL.min} min · 20 pts</span><b>⏱ Rendir el examen completo</b><span>Las 3 preguntas con tiempo, en el editor. Al terminar ves tu nota estimada sobre 20 y las soluciones.</span></a></div>
+    <h2>3. Ejemplos resueltos</h2><p>Lee el enunciado, intenta el diagrama y luego compáralo con la solución completa.</p>
     <div class="grid">${XCASES.filter(c => c.kind === 'ejemplo').map(tile).join('')}</div>
-    <h2>3. Problemas de práctica</h2><p>Ármalos en el editor (con zonas VPC y subnets). El corrector revisa servicios, conexiones, ubicación en la red y que anotes PK/SK, idempotencia y reintentos.</p>
+    <h2>4. Problemas de práctica</h2><p>Ármalos en el editor (con zonas VPC y subnets). El corrector revisa servicios, conexiones, ubicación en la red y que anotes PK/SK, idempotencia y reintentos.</p>
     <div class="grid">${XCASES.filter(c => c.kind === 'practica').map(tile).join('')}</div>`;
     return;
   }
@@ -324,3 +327,41 @@ function pageExamen(id) {
   $('#corr').addEventListener('click', () => { $('#gr').innerHTML = Editor.renderGrade(ed.grade()); $('#gr').scrollIntoView({ behavior: 'smooth' }); });
   if (!ej) $('#sol').addEventListener('click', () => { $('#solx').innerHTML = xSolucion(cs); $('#sol').remove(); });
 }
+
+/* ───── Simulacro del Examen Final real ───── */
+function pageExamenFinal() {
+  clearInterval(timerId);
+  const E = EXAMEN_REAL, items = E.items.map(it => ({ ...it, cs: findCase(it.id) }));
+  app.innerHTML = `<p><a href="#/examen">← Casos tipo examen</a></p>
+  <div class="row" style="justify-content:space-between"><h1 style="margin:0">${E.title}</h1><span class="timer" id="tm"></span></div>
+  <div class="card"><b>Instrucciones</b><ul>${E.instrucciones.map(i => `<li>${i}</li>`).join('')}</ul>
+    <p>Cada pregunta se arma en el editor. Al terminar se corrige sola y la nota de cada pregunta es <i>% del corrector × puntaje</i>. Es una <b>estimación</b>: tu profesor también evalúa tus justificaciones.</p>
+    <button class="btn" id="start">Empezar (${E.min} min)</button></div>
+  <div id="exam" hidden>${items.map((it, i) => `<h2>Pregunta ${i + 1} (${it.pts} puntos)</h2>${xEnunciado(it.cs)}<div id="ed${i}"></div>`).join('')}
+    <div class="row" style="margin:20px 0"><button class="btn" id="fin">Terminar y corregir</button></div></div>
+  <div id="res"></div>`;
+  let eds = [];
+  $('#start').addEventListener('click', () => {
+    $('#start').closest('.card').querySelector('button').remove();
+    $('#exam').hidden = false;
+    eds = items.map((it, i) => { Store.set('ed:final-' + it.id, null); return Editor.mount($('#ed' + i), { caseId: it.id, key: 'final-' + it.id }); });
+    let left = E.min * 60;
+    const tick = () => { const m = Math.floor(left / 60), s = left % 60; $('#tm').textContent = `⏱ ${m}:${String(s).padStart(2, '0')}`; if (left-- <= 0) { clearInterval(timerId); finish(); } };
+    tick(); timerId = setInterval(tick, 1000);
+    $('#fin').addEventListener('click', () => { if (confirm('¿Terminar el examen y ver tu nota?')) finish(); });
+  });
+  const finish = () => {
+    clearInterval(timerId);
+    $('#fin')?.remove();
+    const grades = eds.map(ed => ed.grade());
+    const pts = grades.map((g, i) => Math.round(g.pct * items[i].pts) / 100);
+    const total = Math.round(pts.reduce((a, b) => a + b, 0) * 10) / 10;
+    const bb = best(); if (bb.final == null || total > bb.final) { bb.final = total; Store.set('best', bb); }
+    $('#res').innerHTML = `<div class="card"><div class="score">Nota estimada: ${total} / 20</div>
+      <p>${items.map((it, i) => `Pregunta ${i + 1}: <b>${pts[i]} / ${it.pts}</b> (${grades[i].pct}%)`).join(' · ')}</p></div>
+      ${items.map((it, i) => `<details class="card"><summary>Pregunta ${i + 1}: corrección y solución</summary>${Editor.renderGrade(grades[i])}${xSolucion(it.cs)}</details>`).join('')}`;
+    $('#res').scrollIntoView({ behavior: 'smooth' });
+  };
+}
+
+route();
