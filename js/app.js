@@ -11,14 +11,14 @@ function pageInicio() {
   const nRead = LESSONS.filter(l => r[l.id]).length;
   app.innerHTML = `
 <h1>Prepárate para el Examen Final de Cloud Computing</h1>
-<p class="lead">Todo lo que hay aquí sale de las 6 clases que están en <code>Clases/</code>. Primero aprendes qué hace cada servicio y cuándo usarlo; después practicas preguntas y <b>diagramas de arquitectura de solución</b>, que es lo que pedirá el examen.</p>
+<p class="lead">Todo lo que hay aquí sale de las ${LESSONS.length} clases que están en <code>Clases/</code>. Primero aprendes qué hace cada servicio y cuándo usarlo; después practicas preguntas y <b>diagramas de arquitectura de solución</b>, que es lo que pedirá el examen.</p>
 <div class="card"><b>Tu avance:</b> ${nRead} / ${LESSONS.length} clases leídas
 <div class="progress"><i style="width:${100 * nRead / LESSONS.length}%"></i></div>
 ${Object.keys(b).length ? 'Mejores notas en simulacros: ' + EXAMS.map(e => `${e.title}: <b>${b[e.id] != null ? b[e.id] + '%' : '—'}</b>`).join(' · ') : 'Aún no rindes ningún simulacro.'}</div>
 
 <h2>Ruta de estudio</h2>
 <div class="grid">
- <a class="tile" href="#/aprende"><span class="wk">Paso 1</span><b>Aprende desde cero</b><span>Las 6 clases explicadas con sus diagramas y la fuente de cada dato.</span></a>
+ <a class="tile" href="#/aprende"><span class="wk">Paso 1</span><b>Aprende desde cero</b><span>Las ${LESSONS.length} clases explicadas con sus diagramas y la fuente de cada dato.</span></a>
  <a class="tile" href="#/servicios"><span class="wk">Paso 2</span><b>Qué hace cada servicio</b><span>Lambda, API Gateway, SNS, SQS, EventBridge, DynamoDB, S3, CloudWatch…: para qué sirve, cuándo usarlo y en qué ejemplo de clase aparece.</span></a>
  <a class="tile" href="#/diagramas"><span class="wk">Paso 3</span><b>Diagramas de arquitectura</b><span>Método para dibujarlos y 7 casos resueltos (incluidos los 3 temas del proyecto).</span></a>
  <a class="tile" href="#/examen"><span class="wk">Paso 3b</span><b>Casos tipo examen</b><span>Como el examen: VPC, subnets, endpoints, NAT, on-premise, Saga, idempotencia y tablas PK/SK. 3 ejemplos resueltos y 3 problemas de práctica.</span></a>
@@ -29,7 +29,7 @@ ${Object.keys(b).length ? 'Mejores notas en simulacros: ' + EXAMS.map(e => `${e.
 <h2>Las clases y dónde están en el sílabo</h2>
 <div class="tablewrap"><table>
 <tr><th>Clase (diapositivas)</th><th>Semana</th><th>Tema del sílabo</th></tr>
-${[['bd','BD','6.4.4–6.4.6 Bases de datos SQL, NoSQL y casos de uso'],['multitenancy','MT','6.6 Multi-tenancy'],['serverless','SV','6.8.4 y 6.9 Arquitectura sin servidor'],['lambdas','LM','6.9.2 Funciones como servicio (FaaS)'],['monitoreo','MO','6.11 Monitoreo de infraestructura y aplicaciones'],['eventos','EV','6.8.5 y 6.10 Arquitectura orientada a eventos']]
+${[['vm','VM','6.2 Virtualización con máquinas virtuales'],['contenedores','CT','6.3 Virtualización con contenedores'],['bd','BD','6.4.4–6.4.6 Bases de datos SQL, NoSQL y casos de uso'],['multitenancy','MT','6.6 Multi-tenancy'],['serverless','SV','6.8.4 y 6.9 Arquitectura sin servidor'],['lambdas','LM','6.9.2 Funciones como servicio (FaaS)'],['monitoreo','MO','6.11 Monitoreo de infraestructura y aplicaciones'],['eventos','EV','6.8.5 y 6.10 Arquitectura orientada a eventos']]
   .map(([id, d, s]) => `<tr><td><a href="#/aprende/${id}">${DECKS[d].name}</a> ${r[id] ? '<span class="tag ok">leída</span>' : ''}</td><td>${DECKS[d].week}</td><td>${s}</td></tr>`).join('')}
 </table></div>
 <div class="note">Esta web <b>no</b> cubre temas del sílabo que no tienen diapositivas en <code>Clases/</code>, por ejemplo 6.5 Escalabilidad, 6.7 Seguridad o 6.12 Well-Architected. Si el profesor los incluye en el examen, repásalos con su material.</div>`;
@@ -41,7 +41,7 @@ function pageAprende(id) {
   const r = read();
   const side = `<div class="side">${LESSONS.map(l => `<a href="#/aprende/${l.id}" class="${l.id === id ? 'on' : ''}">${r[l.id] ? '✓ ' : ''}${l.title}</a>`).join('')}</div>`;
   if (!lesson) {
-    app.innerHTML = `<h1>Aprende desde cero</h1><p class="lead">Una clase por tema, en el orden recomendado: primero serverless, porque todo lo demás se arma sobre él.</p>
+    app.innerHTML = `<h1>Aprende desde cero</h1><p class="lead">Una clase por tema. Empieza por máquinas virtuales y contenedores (la base de la nube) y sigue con serverless, porque casi todo lo demás se arma sobre él.</p>
     <div class="grid">${LESSONS.map(l => `<a class="tile" href="#/aprende/${l.id}"><span class="wk">${DECKS[l.deck].week}</span><b>${r[l.id] ? '✓ ' : ''}${l.title}</b><span>${l.short}</span></a>`).join('')}</div>
     <h2>Leyenda de colores de los diagramas</h2>${Diagram.legend()}`;
     return;
@@ -58,6 +58,7 @@ function pageAprende(id) {
       <a class="btn ghost" href="#/practica/mcq/${lesson.id}" style="text-decoration:none">Practicar este tema</a>
       ${next ? `<a class="btn ghost" href="#/aprende/${next.id}" style="text-decoration:none">Siguiente: ${next.title} →</a>` : ''}
     </div></article></div>`;
+  if (id === 'vm') initEc2Calc();
   $('#mark').addEventListener('click', () => { const x = read(); x[id] = true; Store.set('read', x); pageAprende(id); });
 }
 

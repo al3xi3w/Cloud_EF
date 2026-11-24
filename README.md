@@ -4,12 +4,12 @@ Web de estudio para el **Examen Final de CS2032 Cloud Computing**, hecha con las
 
 ## Contenido
 
-- **Aprende**: las 6 clases (Bases de Datos, Multi-tenancy, Serverless, Optimización de Lambdas, Monitoreo y Arquitectura basada en eventos), explicadas desde cero con sus diagramas y la diapositiva de donde sale cada dato.
+- **Aprende**: las 8 clases (Máquinas Virtuales, Contenedores, Bases de Datos, Multi-tenancy, Serverless, Optimización de Lambdas, Monitoreo y Arquitectura basada en eventos), explicadas desde cero con sus diagramas y la diapositiva de donde sale cada dato.
 - **Servicios**: qué hace cada servicio de AWS que aparece en clase, cuándo usarlo y en qué ejemplo sale, más una guía rápida “necesito… → uso…”.
 - **Diagramas**: método para dibujar una arquitectura de solución y 7 casos con solución, incluidos los 3 temas del proyecto (clínicas, camiones IoT y asistencia multi-tenant).
 - **Editor**: arma tu diagrama de arquitectura (servicios, flechas y etiquetas) y se corrige solo: servicios clave, conexiones esperadas y buenas prácticas de clase, cada una con su diapositiva.
 - **Casos examen**: problemas con el formato del examen (VPC, subnets públicas y privadas, NAT, VPC Endpoints, VPN/Direct Connect, Secrets Manager, patrón Saga, idempotencia, tablas DynamoDB con PK/SK, microservicios con ECS/EC2). Incluye las 3 preguntas del Examen Final real (con un simulacro completo de 110 minutos y nota sobre 20), ejemplos resueltos y problemas de práctica que se arman en el editor con zonas (VPC, subnets, on-premise). Este contenido es conocimiento general de AWS, no sale de las diapositivas, y está marcado así en la web.
-- **Práctica**: 69 preguntas de opción múltiple y las 21 preguntas de cierre del profesor, con respuesta modelo.
+- **Práctica**: 95 preguntas de opción múltiple y las 27 preguntas de cierre del profesor, con respuesta modelo.
 - **Simulacros**: 3 exámenes con tiempo (opción múltiple, preguntas abiertas y un diagrama).
 
 Lo que no sale de las diapositivas está marcado como *fuera de las diapositivas* o *decisión de diseño*.
