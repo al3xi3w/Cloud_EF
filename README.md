@@ -1,6 +1,6 @@
 # Cloud_EF
 
-Web de estudio para el **Examen Final de CS2032 Cloud Computing**, hecha solo con las diapositivas de [`Clases/`](Clases/).
+Web de estudio para el **Examen Final de CS2032 Cloud Computing**, hecha con las diapositivas de [`Clases/`](Clases/). La sección **Casos examen** agrega conocimiento general de AWS que no está en las diapositivas, y está marcado así.
 
 ## Contenido
 
