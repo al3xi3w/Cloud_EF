@@ -89,8 +89,9 @@ function svcCard(s) {
 }
 function pageServicios() {
   app.innerHTML = `<h1>¿Qué hace cada servicio?</h1>
-  <p class="lead">Son todos los servicios de AWS que aparecen en las diapositivas. La definición es la cita de la clase; “cuándo usarlo” sale de los ejemplos que mostró el profesor.</p>
-  <h2>Guía rápida: “necesito… → uso…”</h2>
+  <p class="lead">Primero, la <b>guía para el examen</b>: qué servicios usar, dónde dibujarlos y qué frase del enunciado los pide. Abajo está el <b>catálogo</b> completo: en los servicios de clase, la definición es la cita de la diapositiva; los demás están marcados como “fuera de las diapositivas”.</p>
+  ${examGuideHtml()}
+  <h2>Guía rápida de clase: “necesito… → uso…”</h2>
   <div class="tablewrap"><table><tr><th>Necesito…</th><th>Servicio</th><th>Fuente</th></tr>
   ${GUIA.map(([n, id, s]) => `<tr><td>${n}</td><td><a href="#/servicios" data-j="${id}"><span class="cat" style="background:${CATS[SVC[id].cat].color}"></span>${SVC[id].name}</a></td><td class="src" style="margin:0">${s}</td></tr>`).join('')}</table></div>
   <h2>Catálogo</h2>
@@ -304,7 +305,7 @@ function pageExamen(id) {
     <p class="lead">Problemas con el formato del examen: un enunciado de negocio, requerimientos no funcionales y “se pide el diagrama 100% AWS con VPC, subnets, endpoints, NAT, conexión on-premise y tablas PK/SK”.</p>
     <div class="note"><span class="tag warn">fuera de las diapositivas</span> VPC, subnets, NAT, VPC Endpoints, VPN y Direct Connect, Secrets Manager, KMS, ALB, ECS y EC2, el patrón Saga, la idempotencia y el diseño PK/SK <b>no están en <code>Clases/</code></b>. Es conocimiento general de AWS, agregado porque el examen lo pide. Revisa estas soluciones con criterio y con tu profesor.</div>
     <h2>1. Conceptos que necesitas para estos problemas</h2>
-    ${CONCEPTS.map(c => `<details><summary>${c.t}</summary>${c.h}</details>`).join('')}
+    ${CONCEPTS.map(c => `<details><summary>${c.t}</summary>${Diagram.fill(c.h)}</details>`).join('')}
     <h2>2. Examen Final real (Prof. Santiago Silva)</h2><p>Las 3 preguntas del examen. La 1 está resuelta como ejemplo; la 2 y la 3 tienen la solución oculta hasta que la pidas.</p>
     <div class="grid">${XCASES.filter(c => c.real).sort((a, b) => a.real - b.real).map(tile).join('')}<a class="tile" href="#/examen/final" style="border-color:var(--accent)"><span class="wk">Simulacro · ${EXAMEN_REAL.min} min · 20 pts</span><b>⏱ Rendir el examen completo</b><span>Las 3 preguntas con tiempo, en el editor. Al terminar ves tu nota estimada sobre 20 y las soluciones.</span></a></div>
     <h2>3. Ejemplos resueltos</h2><p>Lee el enunciado, intenta el diagrama y luego compáralo con la solución completa.</p>

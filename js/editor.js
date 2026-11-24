@@ -80,6 +80,8 @@ const Editor = (() => {
         tips.push({ st: 'bad', text: `“${a}” accede directo a la base de datos “${b}”. En clase el cliente pasa por API Gateway → Lambda.`, src: 'SV p.21' });
       if (e.ft === 'actor' && e.tt === 'lambda')
         tips.push({ st: 'warn', text: `“${a}” llama directo a la Lambda “${b}”. En clase la entrada es API Gateway (REST), Kinesis (stream) o S3 (archivo).`, src: 'SV p.19–23' });
+      if (e.ft === 'vpclink' && e.tt === 'lambda')
+        tips.push({ st: 'warn', text: `“${a}” → “${b}”: una Lambda no necesita VPC Link. API Gateway la invoca directamente. El VPC Link es para contenedores o EC2 detrás de un balanceador interno.`, src: 'fuera de las diapositivas' });
       if (e.ft === 'lambda' && e.tt === 'lambda')
         tips.push({ st: 'warn', text: `“${a}” → “${b}” es una llamada directa entre funciones: síncrona y acoplada. Si no necesitas la respuesta, usa una cola o un evento.`, src: 'EV p.16–19' });
     }
