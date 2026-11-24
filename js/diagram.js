@@ -1,4 +1,14 @@
 /* Dibuja los diagramas de DIAGRAMS como SVG. */
+/* Estilo de las zonas (grupos) en diagramas y en el editor */
+const ZONES = {
+  cloud:   { name: 'AWS Cloud / Región', pad: 48, stroke: '#f08c00', fill: 'none', sw: 1.5, dash: false },
+  vpc:     { name: 'VPC', pad: 30, stroke: '#7048e8', fill: 'color-mix(in srgb,#7048e8 4%,transparent)', sw: 1.5, dash: false },
+  pub:     { name: 'Subnet pública', pad: 12, stroke: '#2f9e44', fill: 'color-mix(in srgb,#2f9e44 9%,transparent)', sw: 1.2, dash: false },
+  priv:    { name: 'Subnet privada', pad: 12, stroke: '#1c7ed6', fill: 'color-mix(in srgb,#1c7ed6 8%,transparent)', sw: 1.2, dash: false },
+  onprem:  { name: 'On-premise / Datacenter', pad: 14, stroke: '#868e96', fill: 'color-mix(in srgb,#868e96 8%,transparent)', sw: 1.2, dash: true },
+  default: { name: 'Grupo', pad: 10, stroke: 'var(--muted)', fill: 'none', sw: 1, dash: true },
+};
+
 const Diagram = (() => {
   const BW = 150, BH = 54;          // tamaño de cada caja
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -20,7 +30,7 @@ const Diagram = (() => {
     const vert = d.dir === 'v';
     const cw = d.cw || (vert ? 170 : 215), rh = vert ? 120 : 82;
     const minC = Math.min(...d.nodes.map(n => n[3])), minR = Math.min(...d.nodes.map(n => n[4]));
-    const P = 30;
+    const P = (d.groups || []).some(g => g[5] === 'cloud') ? 72 : (d.groups || []).some(g => g[5]) ? 50 : 30;
     const N = {};
     for (const [nid, label, cat, c, r, sub] of d.nodes) {
       const x = P + (c - minC) * cw, y = P + 18 + (r - minR) * rh;
@@ -30,11 +40,14 @@ const Diagram = (() => {
     const col = c => (CATS[c] || CATS.cliente).color;
 
     // grupos
-    for (const [gl, c1, r1, c2, r2] of d.groups || []) {
-      const x = P + (c1 - minC) * cw - 10, y = P + 18 + (r1 - minR) * rh - 24;
-      const w = (c2 - c1) * cw + BW + 20, h = (r2 - r1) * rh + BH + 34;
-      parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" style="fill:none;stroke:var(--muted);stroke-dasharray:5 4;stroke-width:1"/>`);
-      parts.push(`<text x="${x + 8}" y="${y + 15}" style="fill:var(--muted);font-size:11px;font-weight:600">${esc(gl)}</text>`);
+    let gMaxX = 0, gMaxY = 0;
+    for (const [gl, c1, r1, c2, r2, kind] of d.groups || []) {
+      const st = ZONES[kind] || ZONES.default, pad = st.pad;
+      const x = P + (c1 - minC) * cw - pad, y = P + 18 + (r1 - minR) * rh - pad - 16;
+      const w = (c2 - c1) * cw + BW + 2 * pad, h = (r2 - r1) * rh + BH + 2 * pad + 16;
+      gMaxX = Math.max(gMaxX, x + w); gMaxY = Math.max(gMaxY, y + h);
+      parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" style="fill:${st.fill};stroke:${st.stroke};stroke-width:${st.sw};${st.dash ? 'stroke-dasharray:6 4;' : ''}"/>`);
+      parts.push(`<text x="${x + 8}" y="${y + 13}" style="fill:${st.stroke};font-size:11px;font-weight:700">${esc(gl)}</text>`);
     }
 
     // aristas
@@ -83,8 +96,8 @@ const Diagram = (() => {
       parts.push('</g>');
     }
 
-    const W = Math.max(...Object.values(N).map(n => n.r)) + P + 10;
-    const H = Math.max(...Object.values(N).map(n => n.b)) + P;
+    const W = Math.max(gMaxX + 10, Math.max(...Object.values(N).map(n => n.r)) + P + 10);
+    const H = Math.max(gMaxY + 10, Math.max(...Object.values(N).map(n => n.b)) + P);
     return `<div class="dia"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:${Math.round(W * 0.62)}px;max-width:${W}px" role="img" aria-label="Diagrama ${esc(id)}">
 <defs><marker id="ah-${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
 ${parts.join('')}${labels.join('')}</svg></div>`;

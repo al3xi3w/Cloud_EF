@@ -21,6 +21,7 @@ ${Object.keys(b).length ? 'Mejores notas en simulacros: ' + EXAMS.map(e => `${e.
  <a class="tile" href="#/aprende"><span class="wk">Paso 1</span><b>Aprende desde cero</b><span>Las 6 clases explicadas con sus diagramas y la fuente de cada dato.</span></a>
  <a class="tile" href="#/servicios"><span class="wk">Paso 2</span><b>Qué hace cada servicio</b><span>Lambda, API Gateway, SNS, SQS, EventBridge, DynamoDB, S3, CloudWatch…: para qué sirve, cuándo usarlo y en qué ejemplo de clase aparece.</span></a>
  <a class="tile" href="#/diagramas"><span class="wk">Paso 3</span><b>Diagramas de arquitectura</b><span>Método para dibujarlos y 7 casos resueltos (incluidos los 3 temas del proyecto).</span></a>
+ <a class="tile" href="#/examen"><span class="wk">Paso 3b</span><b>Casos tipo examen</b><span>Como el examen: VPC, subnets, endpoints, NAT, on-premise, Saga, idempotencia y tablas PK/SK. 3 ejemplos resueltos y 3 problemas de práctica.</span></a>
  <a class="tile" href="#/practica"><span class="wk">Paso 4</span><b>Práctica</b><span>${QUESTIONS.length} preguntas de opción múltiple y ${OPEN.length} preguntas abiertas del profesor.</span></a>
  <a class="tile" href="#/simulacros"><span class="wk">Paso 5</span><b>Simulacros de examen</b><span>3 exámenes con tiempo: opción múltiple, preguntas abiertas y un diagrama.</span></a>
 </div>
@@ -79,7 +80,7 @@ const GUIA = [
   ['No perder mensajes que fallaron', 'dlq', 'SV p.16'],
 ];
 function svcCard(s) {
-  return `<div class="card" id="svc-${s.id}"><div class="svc-h"><span class="cat" style="background:${CATS[s.cat].color};width:14px;height:14px"></span><h3>${s.name}</h3><span class="tag">${CATS[s.cat].name}</span>${s.fuera ? '<span class="tag warn">solo aparece en un diagrama</span>' : ''}</div>
+  return `<div class="card" id="svc-${s.id}"><div class="svc-h"><span class="cat" style="background:${CATS[s.cat].color};width:14px;height:14px"></span><h3>${s.name}</h3><span class="tag">${CATS[s.cat].name}</span>${s.fuera === 'general' ? '<span class="tag warn">fuera de las diapositivas · conocimiento general de AWS</span>' : s.fuera ? '<span class="tag warn">solo aparece en un diagrama</span>' : ''}</div>
   <p><b>¿Qué hace?</b> ${s.que}</p>${src(s.src)}
   <p><b>¿Cuándo usarlo?</b></p><ul>${s.cuando.map(c => `<li>${c}</li>`).join('')}</ul>
   ${s.datos ? `<p><b>Datos que pueden preguntar:</b></p><ul>${s.datos.map(c => `<li>${c}</li>`).join('')}</ul>` : ''}
@@ -159,11 +160,12 @@ function pageDiagramas(id) {
 
 /* ───── Editor ───── */
 function pageEditor(id) {
-  const cs = CASES.find(c => c.id === id);
+  const cs = findCase(id);
   app.innerHTML = `<h1>Editor de diagramas</h1>
   <p class="lead">Arma tu arquitectura de solución y el editor la corrige: revisa <b>servicios clave</b>, <b>conexiones esperadas</b> y <b>buenas prácticas de clase</b>, cada una con su diapositiva.</p>
   <div class="chips"><a class="chip ${!cs ? 'on' : ''}" href="#/editor" style="text-decoration:none">Modo libre</a>${CASES.map(c => `<a class="chip ${cs === c ? 'on' : ''}" href="#/editor/${c.id}" style="text-decoration:none">${c.title}</a>`).join('')}</div>
-  ${cs ? `<div class="card"><b>Enunciado:</b> ${cs.enunciado}</div>` : `<div class="card">En <b>modo libre</b> no hay solución de referencia: se revisan solo las buenas prácticas de clase. Úsalo para practicar con tus propios enunciados, por ejemplo una pregunta de examen.</div>`}
+  <div class="chips"><small style="color:var(--muted);align-self:center">Casos tipo examen:</small>${XCASES.map(c => `<a class="chip ${cs === c ? 'on' : ''}" href="#/editor/${c.id}" style="text-decoration:none">${c.title}</a>`).join('')}</div>
+  ${cs ? (cs.flujo ? xEnunciado(cs) : `<div class="card"><b>Enunciado:</b> ${cs.enunciado}</div>`) : `<div class="card">En <b>modo libre</b> no hay solución de referencia: se revisan solo las buenas prácticas de clase. Úsalo para practicar con tus propios enunciados, por ejemplo una pregunta de examen.</div>`}
   <details class="card" style="padding:8px 14px"><summary>Cómo usar el editor</summary><ul>
     <li>Haz clic en un servicio de la paleta para agregarlo. Con <b>+ Actor</b> agregas personas o dispositivos (paciente, sensor, tablet…).</li>
     <li><b>✋ Mover</b>: arrastra los nodos. <b>Doble clic</b> para renombrarlos (ej. “Lambda registrarCaso”).</li>
@@ -175,7 +177,7 @@ function pageEditor(id) {
   const ed = Editor.mount($('#ed'), { caseId: cs ? cs.id : null });
   $('#corr').addEventListener('click', () => { $('#gr').innerHTML = Editor.renderGrade(ed.grade()); $('#gr').scrollIntoView({ behavior: 'smooth' }); });
   if (cs) $('#sol').addEventListener('click', () => {
-    $('#solbox').innerHTML = `<h2>Solución de referencia</h2>${Diagram.legend()}${Diagram.render(cs.diagram)}<ol class="steps">${cs.explica.map(e => `<li>${e}</li>`).join('')}</ol>${cs.notas.map(n => `<div class="note">${n}</div>`).join('')}`;
+    $('#solbox').innerHTML = cs.flujo ? xSolucion(cs) : `<h2>Solución de referencia</h2>${Diagram.legend()}${Diagram.render(cs.diagram)}<ol class="steps">${cs.explica.map(e => `<li>${e}</li>`).join('')}</ol>${cs.notas.map(n => `<div class="note">${n}</div>`).join('')}`;
     $('#sol').remove();
   });
 }
@@ -261,7 +263,7 @@ function route() {
   const [, page = 'inicio', a, b] = (location.hash || '#/inicio').split('/');
   document.querySelectorAll('#nav a').forEach(x => x.classList.toggle('on', x.dataset.r === page));
   if (page !== 'simulacros') clearInterval(timerId);
-  ({ inicio: pageInicio, aprende: () => pageAprende(a), servicios: pageServicios, diagramas: () => pageDiagramas(a), editor: () => pageEditor(a),practica: () => pagePractica(a, b), simulacros: () => pageSimulacros(a) }[page] || pageInicio)();
+  ({ inicio: pageInicio, aprende: () => pageAprende(a), servicios: pageServicios, diagramas: () => pageDiagramas(a), editor: () => pageEditor(a), examen: () => pageExamen(a),practica: () => pagePractica(a, b), simulacros: () => pageSimulacros(a) }[page] || pageInicio)();
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);
@@ -275,3 +277,50 @@ $('#theme').addEventListener('click', () => {
   Store.set('theme', document.documentElement.dataset.theme);
 });
 route();
+
+/* ───── Casos tipo examen ───── */
+function xEnunciado(cs) {
+  return `<div class="card"><span class="tag">${cs.kind === 'ejemplo' ? 'Ejemplo resuelto' : 'Práctica'} · ${cs.pts} puntos</span>
+    <p><b>${cs.title}</b></p><p>${cs.enunciado}</p>
+    <p><b>Requerimientos:</b></p><ul>${cs.requisitos.map(r => `<li>${r}</li>`).join('')}</ul>
+    <p><b>Se pide:</b> ${cs.sepide}</p></div>`;
+}
+function xSolucion(cs) {
+  return `<h2>Solución</h2>${Diagram.legend(['cliente', 'computo', 'integracion', 'datos', 'red', 'seguridad', 'monitoreo', 'web'])}
+    <div class="legend">${['cloud', 'vpc', 'pub', 'priv', 'onprem'].map(k => `<span><span class="cat" style="background:${ZONES[k].stroke}"></span>${ZONES[k].name}</span>`).join('')}</div>
+    ${Diagram.render(cs.diagram)}
+    <h3>Flujo paso a paso</h3><ol class="steps">${cs.flujo.map(f => `<li>${f}</li>`).join('')}</ol>
+    <h3>Cómo se cumple cada requerimiento</h3><div class="tablewrap"><table><tr><th>Requerimiento</th><th>Solución</th></tr>${cs.tabla.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table></div>
+    ${cs.ddb.length ? `<h3>Tablas de DynamoDB</h3><div class="tablewrap"><table><tr><th>Tabla</th><th>PK</th><th>SK</th><th>Atributos</th><th>Patrón de acceso</th></tr>${cs.ddb.map(t => `<tr><td><b>${t.tabla}</b></td><td><code>${t.pk}</code></td><td><code>${t.sk}</code></td><td>${t.attrs}</td><td>${t.uso}</td></tr>`).join('')}</table></div>` : ''}
+    ${cs.notas.map(n => `<div class="note">${n}</div>`).join('')}`;
+}
+function pageExamen(id) {
+  const cs = XCASES.find(c => c.id === id);
+  if (!cs) {
+    const tile = c => `<a class="tile" href="#/examen/${c.id}"><span class="wk">${c.kind === 'ejemplo' ? 'Ejemplo resuelto' : 'Práctica'} · ${c.pts} pts</span><b>${c.title}</b><span>${c.enunciado.replace(/<[^>]+>/g, '').slice(0, 130)}…</span></a>`;
+    app.innerHTML = `<h1>Casos tipo examen</h1>
+    <p class="lead">Problemas con el formato del examen: un enunciado de negocio, requerimientos no funcionales y “se pide el diagrama 100% AWS con VPC, subnets, endpoints, NAT, conexión on-premise y tablas PK/SK”.</p>
+    <div class="note"><span class="tag warn">fuera de las diapositivas</span> VPC, subnets, NAT, VPC Endpoints, VPN y Direct Connect, Secrets Manager, KMS, ALB, ECS y EC2, el patrón Saga, la idempotencia y el diseño PK/SK <b>no están en <code>Clases/</code></b>. Es conocimiento general de AWS, agregado porque el examen lo pide. Revisa estas soluciones con criterio y con tu profesor.</div>
+    <h2>1. Conceptos que necesitas para estos problemas</h2>
+    ${CONCEPTS.map(c => `<details><summary>${c.t}</summary>${c.h}</details>`).join('')}
+    <h2>2. Ejemplos resueltos</h2><p>Lee el enunciado, intenta el diagrama y luego compáralo con la solución completa.</p>
+    <div class="grid">${XCASES.filter(c => c.kind === 'ejemplo').map(tile).join('')}</div>
+    <h2>3. Problemas de práctica</h2><p>Ármalos en el editor (con zonas VPC y subnets). El corrector revisa servicios, conexiones, ubicación en la red y que anotes PK/SK, idempotencia y reintentos.</p>
+    <div class="grid">${XCASES.filter(c => c.kind === 'practica').map(tile).join('')}</div>`;
+    return;
+  }
+  const ej = cs.kind === 'ejemplo';
+  app.innerHTML = `<p><a href="#/examen">← Casos tipo examen</a></p>
+  <h1>${cs.title}</h1>${xEnunciado(cs)}
+  ${ej ? `<div id="solbox">${xSolucion(cs)}</div>
+    <h2>Practícalo en el editor</h2><p>Dibújalo tú sin mirar la solución y presiona Corregir.</p>`
+  : `<h2>Pistas</h2>${cs.pistas.map((p, i) => `<details><summary>Pista ${i + 1}</summary>${p}</details>`).join('')}
+    <h2>Arma tu diagrama</h2>
+    <div class="note">Tip: primero agrega las <b>zonas</b> (AWS Cloud, VPC, subnet pública y privada, on-premise) y luego pon los servicios dentro. Anota PK/SK en el nombre del nodo DynamoDB (doble clic), por ejemplo “Pagos PK=USER#id SK=PAGO#fecha”.</div>`}
+  <div id="ed"></div>
+  <div class="row" style="margin:10px 0"><button class="btn" id="corr">✔ Corregir</button>${ej ? '' : '<button class="btn ghost" id="sol">Ver solución</button>'}</div>
+  <div id="gr"></div>${ej ? '' : '<div id="solx"></div>'}`;
+  const ed = Editor.mount($('#ed'), { caseId: cs.id });
+  $('#corr').addEventListener('click', () => { $('#gr').innerHTML = Editor.renderGrade(ed.grade()); $('#gr').scrollIntoView({ behavior: 'smooth' }); });
+  if (!ej) $('#sol').addEventListener('click', () => { $('#solx').innerHTML = xSolucion(cs); $('#sol').remove(); });
+}

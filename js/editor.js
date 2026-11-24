@@ -1,7 +1,7 @@
 /* Editor de diagramas de arquitectura con corrección automática.
    Editor.mount(root, { caseId, key }) → { grade(), model } */
 const Editor = (() => {
-  const BW = 150, BH = 54, W = 1150, H = 700;
+  const BW = 150, BH = 54, W = 1300, H = 900;
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const short = n => n.replace(/^(Amazon|AWS) /, '');
   const typeName = t => t === 'actor' ? 'Actor' : SVC[t].name;
@@ -16,7 +16,10 @@ const Editor = (() => {
 
   /* ───── corrección ───── */
   function grade(model, caseId) {
-    const G = caseId ? GRADING[caseId] : null, cs = caseId ? CASES.find(c => c.id === caseId) : null;
+    const G = caseId ? GRADING[caseId] : null, cs = caseId ? findCase(caseId) : null;
+    const groups = model.groups || [];
+    const center = n => [n.x + BW / 2, n.y + BH / 2];
+    const inZone = (n, kind) => { const [cx, cy] = center(n); const kinds = kind === 'vpc' ? ['vpc', 'pub', 'priv'] : [kind]; return groups.some(g => kinds.includes(g.kind) && cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h); };
     const byId = Object.fromEntries(model.nodes.map(n => [n.id, n]));
     const E = model.edges.map(e => ({ ...e, ft: byId[e.from]?.type, tt: byId[e.to]?.type })).filter(e => e.ft && e.tt);
     const types = new Set(model.nodes.map(n => n.type));
@@ -29,13 +32,22 @@ const Editor = (() => {
       res.pts += 40 * hit / cs.req.length; res.max += 40;
     }
     if (G) {    // 2. conexiones esperadas (50 %)
-      const all = [...G.conn.map(c => ({ ...c, kind: 'conn' })), ...(G.text || []).map(t => ({ ...t, kind: 'text' }))];
+      const all = [...G.conn.map(c => ({ ...c, kind: 'conn' })), ...(G.text || []).map(t => ({ ...t, kind: 'text' })), ...(G.inside || []).map(t => ({ ...t, zone: t.kind, kind: 'inside' }))];
       let got = 0;
       const items = all.map(c => {
         if (c.kind === 'text') {
           const ok = [...model.nodes.map(n => n.label), ...model.edges.map(e => e.label || '')].some(s => c.re.test(s));
           got += ok ? 1 : 0;
           return { st: ok ? 'ok' : 'bad', text: c.why, src: c.src };
+        }
+        if (c.kind === 'inside') {
+          const zn = (ZONES[c.zone] || {}).name || c.zone;
+          const ns = model.nodes.filter(n => c.types.includes(n.type) && (!c.label || c.label.test(n.label)));
+          if (!ns.length) return { st: 'bad', text: `<b>Ubicación:</b> no hay nodos para revisar. ${c.why}` };
+          const ok = ns.filter(n => inZone(n, c.zone));
+          got += ok.length === ns.length ? 5 : 0;
+          const bad = ns.filter(n => !inZone(n, c.zone)).map(n => '“' + n.label + '”');
+          return { st: bad.length ? (ok.length ? 'warn' : 'bad') : 'ok', text: `<b>Dentro de ${zn}</b>: ${bad.length ? 'fuera: ' + bad.join(', ') + '. ' : ''}${c.why}` };
         }
         const need = c.min || 1;
         const n = E.filter(e => c.f.includes(e.ft) && c.t.includes(e.tt)).length;
@@ -46,8 +58,9 @@ const Editor = (() => {
         if (rev > 0) { got += 0.5; return { st: 'warn', text: `<b>${name}</b>: la flecha está al revés. ${c.why}`, src: c.src }; }
         return { st: 'bad', text: `<b>Falta ${name}</b>: ${c.why}`, src: c.src };
       });
-      res.sections.push({ title: `Conexiones esperadas (${Math.round(got * 10) / 10}/${all.length})`, items });
-      res.pts += 50 * got / all.length; res.max += 50;
+      const total = all.reduce((t, c) => t + (c.kind === 'inside' ? 5 : 1), 0);
+      res.sections.push({ title: `Conexiones, ubicación y anotaciones (${Math.round(got * 10) / 10}/${total})`, items });
+      res.pts += 50 * got / total; res.max += 50;
     }
 
     // 3. buenas prácticas de clase (10 %, o 100 % en modo libre)
@@ -70,6 +83,9 @@ const Editor = (() => {
       if (e.ft === 'lambda' && e.tt === 'lambda')
         tips.push({ st: 'warn', text: `“${a}” → “${b}” es una llamada directa entre funciones: síncrona y acoplada. Si no necesitas la respuesta, usa una cola o un evento.`, src: 'EV p.16–19' });
     }
+    for (const n of model.nodes) if (['lambda', 'ecs', 'ec2', 'fargate', 'eks', 'rds', 'aurora'].includes(n.type) && inZone(n, 'pub') && !inZone(n, 'priv'))
+      tips.push({ st: 'bad', text: `“${n.label}” está en una subnet pública: el cómputo y las bases de datos van en subnets privadas.`, src: 'fuera de las diapositivas' });
+    for (const n of model.nodes) if (n.type === 'nat' && groups.length && !inZone(n, 'pub')) tips.push({ st: 'warn', text: 'El NAT Gateway debe estar en una subnet pública.', src: 'fuera de las diapositivas' });
     if (model.nodes.length && !types.has('cloudwatch')) tips.push({ st: 'warn', text: 'No hay monitoreo: agrega CloudWatch (métricas, logs y alarmas por umbral).', src: 'MO p.9–12' });
     const unl = model.edges.filter(e => !e.label).length;
     if (model.edges.length && unl > model.edges.length / 2) tips.push({ st: 'warn', text: `${unl} de ${model.edges.length} flechas no tienen etiqueta. Rotúlalas (POST, “evento X”, “guarda”…): el profesor las lee.` });
@@ -94,6 +110,7 @@ const Editor = (() => {
   function mount(root, opts = {}) {
     const key = 'ed:' + (opts.key || opts.caseId || 'libre');
     let model = Store.get(key, null) || { nodes: [], edges: [] };
+    model.groups = model.groups || [];
     let mode = 'move', sel = null, pending = null, seq = Date.now();
     const save = () => Store.set(key, model);
 
@@ -106,8 +123,8 @@ const Editor = (() => {
         <button class="eb" data-a="clear">Limpiar todo</button>
         <span class="ed-hint"></span>
       </div>
-      <div class="ed-pal">${cats.map(c => `<div class="pg"><small><span class="cat" style="background:${CATS[c].color}"></span>${CATS[c].name}</small><div class="chips">`
-        + (c === 'cliente' ? `<button class="chip pa" data-t="actor">+ Actor (usuario, sensor, tablet…)</button>` : SERVICES.filter(s => s.cat === c).map(s => `<button class="chip pa" data-t="${s.id}">+ ${short(s.name)}</button>`).join(''))
+      <div class="ed-pal"><div class="pg"><small>▢ Zonas (arrástralas por el título y cambia su tamaño desde la esquina inferior derecha)</small><div class="chips">${['cloud', 'vpc', 'pub', 'priv', 'onprem'].map(k => `<button class="chip pz" data-z="${k}" style="border-color:${ZONES[k].stroke}">+ ${ZONES[k].name}</button>`).join('')}</div></div>${cats.map(c => `<div class="pg"><small><span class="cat" style="background:${CATS[c].color}"></span>${CATS[c].name}</small><div class="chips">`
+        + (c === 'cliente' ? `<button class="chip pa" data-t="actor">+ Actor (usuario, sensor, tablet…)</button>` : SERVICES.filter(s => s.cat === c && !s.nopal).map(s => `<button class="chip pa" data-t="${s.id}">+ ${short(s.name)}</button>`).join(''))
         + `</div></div>`).join('')}</div>
       <div class="ed-wrap"><svg class="ed-svg" viewBox="0 0 ${W} ${H}">
         <defs><marker id="ed-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker>
@@ -129,6 +146,14 @@ const Editor = (() => {
     function draw() {
       const byId = Object.fromEntries(model.nodes.map(n => [n.id, n]));
       let s = '';
+      const order = { cloud: 0, vpc: 1, onprem: 1, pub: 2, priv: 2 };
+      for (const z of [...model.groups].sort((a, b) => order[a.kind] - order[b.kind])) {
+        const st = ZONES[z.kind], on = sel && sel.kind === 'g' && sel.id === z.id;
+        s += `<g class="ed-z" data-z="${z.id}"><rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="10" style="fill:${st.fill};stroke:${on ? 'var(--accent)' : st.stroke};stroke-width:${on ? 2.5 : 1.5};${st.dash ? 'stroke-dasharray:6 4;' : ''}pointer-events:none"/>`
+          + `<rect class="ed-zh" x="${z.x}" y="${z.y}" width="${z.w}" height="22" rx="10" style="fill:transparent;cursor:move;touch-action:none"/>`
+          + `<text x="${z.x + 10}" y="${z.y + 15}" style="fill:${st.stroke};font-size:12px;font-weight:700;pointer-events:none">${esc(z.label)}</text>`
+          + `<rect class="ed-zr" x="${z.x + z.w - 14}" y="${z.y + z.h - 14}" width="14" height="14" rx="3" style="fill:${st.stroke};opacity:.6;cursor:nwse-resize;touch-action:none"/></g>`;
+      }
       for (const e of model.edges) {
         const a = byId[e.from], b = byId[e.to]; if (!a || !b) continue;
         const [x1, y1] = border(a, b.x + BW / 2, b.y + BH / 2), [x2, y2] = border(b, a.x + BW / 2, a.y + BH / 2);
@@ -160,30 +185,50 @@ const Editor = (() => {
       const n = { id: 'n' + (seq++), type, label: label.trim(), x, y };
       model.nodes.push(n); sel = { kind: 'n', id: n.id }; save(); draw();
     }
+    function addZone(kind) {
+      const k = model.groups.length, big = { cloud: [1200, 820], vpc: [900, 600], onprem: [260, 260] }[kind] || [380, 300];
+      const z = { id: 'z' + (seq++), kind, label: ZONES[kind].name, x: 20 + (k % 4) * 30, y: 20 + (k % 4) * 30, w: big[0], h: big[1] };
+      model.groups.push(z); sel = { kind: 'g', id: z.id }; save(); draw();
+    }
     function rename() {
       if (!sel) return;
+      if (sel.kind === 'g') { const z = model.groups.find(x => x.id === sel.id); const v = prompt('Nombre de la zona (ej. “Subnet privada AZ-a”, “Datacenter San Isidro”)', z.label); if (v != null && v.trim()) z.label = v.trim(); save(); draw(); return; }
       if (sel.kind === 'n') { const n = model.nodes.find(x => x.id === sel.id); const v = prompt('Nombre del nodo (ej. “Lambda registrarCaso”)', n.label); if (v != null && v.trim()) n.label = v.trim(); }
       else { const e = model.edges.find(x => x.id === sel.id); const v = prompt('Etiqueta de la flecha (ej. POST /casos, evento CasoRegistrado, guarda)', e.label || ''); if (v != null) e.label = v.trim(); }
       save(); draw();
     }
     function del() {
       if (!sel) return;
-      if (sel.kind === 'n') { model.nodes = model.nodes.filter(n => n.id !== sel.id); model.edges = model.edges.filter(e => e.from !== sel.id && e.to !== sel.id); }
+      if (sel.kind === 'g') model.groups = model.groups.filter(z => z.id !== sel.id);
+      else if (sel.kind === 'n') { model.nodes = model.nodes.filter(n => n.id !== sel.id); model.edges = model.edges.filter(e => e.from !== sel.id && e.to !== sel.id); }
       else model.edges = model.edges.filter(e => e.id !== sel.id);
       sel = null; save(); draw();
     }
 
     root.querySelectorAll('.pa').forEach(b => b.addEventListener('click', () => addNode(b.dataset.t)));
+    root.querySelectorAll('.pz').forEach(b => b.addEventListener('click', () => addZone(b.dataset.z)));
     root.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
       mode = b.dataset.m; pending = null; root.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b)); draw();
     }));
     root.querySelector('[data-a="rename"]').addEventListener('click', rename);
     root.querySelector('[data-a="del"]').addEventListener('click', del);
-    root.querySelector('[data-a="clear"]').addEventListener('click', () => { if (model.nodes.length && confirm('¿Borrar todo el diagrama?')) { model = { nodes: [], edges: [] }; sel = pending = null; save(); draw(); } });
+    root.querySelector('[data-a="clear"]').addEventListener('click', () => { if ((model.nodes.length || model.groups.length) && confirm('¿Borrar todo el diagrama?')) { model = { nodes: [], edges: [], groups: [] }; sel = pending = null; save(); draw(); } });
 
     let drag = null;
     svg.addEventListener('pointerdown', e => {
-      const ng = e.target.closest('.ed-n'), eg = e.target.closest('.ed-e');
+      const ng = e.target.closest('.ed-n'), eg = e.target.closest('.ed-e'), zg = e.target.closest('.ed-z');
+      if (zg && !ng && mode === 'move') {
+        const z = model.groups.find(x => x.id === zg.dataset.z), p = pt(e);
+        sel = { kind: 'g', id: z.id };
+        if (e.target.classList.contains('ed-zr')) drag = { zr: z, sx: p.x, sy: p.y, w0: z.w, h0: z.h };
+        else if (e.target.classList.contains('ed-zh')) {
+          const inside = (x, y) => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h;
+          const nodes = model.nodes.filter(n => inside(n.x + BW / 2, n.y + BH / 2)).map(n => [n, n.x, n.y]);
+          const zs = model.groups.filter(o => o !== z && inside(o.x, o.y) && inside(o.x + o.w, o.y + o.h)).map(o => [o, o.x, o.y]);
+          drag = { zm: z, sx: p.x, sy: p.y, x0: z.x, y0: z.y, nodes, zs };
+        }
+        e.preventDefault(); draw(); return;
+      }
       if (ng) {
         const id = ng.dataset.n;
         if (mode === 'connect') {
@@ -204,10 +249,19 @@ const Editor = (() => {
       if (eg) { sel = { kind: 'e', id: eg.dataset.e }; draw(); return; }
       sel = null; pending = null; draw();
     });
-    const move = e => { if (!drag) return; const p = pt(e); drag.n.x = Math.max(0, Math.min(W - BW, Math.round((p.x - drag.dx) / 10) * 10)); drag.n.y = Math.max(0, Math.min(H - BH, Math.round((p.y - drag.dy) / 10) * 10)); draw(); };
+    const snap = v => Math.round(v / 10) * 10;
+    const move = e => {
+      if (!drag) return; const p = pt(e);
+      if (drag.zr) { drag.zr.w = Math.max(160, snap(drag.w0 + p.x - drag.sx)); drag.zr.h = Math.max(100, snap(drag.h0 + p.y - drag.sy)); draw(); return; }
+      if (drag.zm) {
+        const dx = snap(p.x - drag.sx), dy = snap(p.y - drag.sy);
+        drag.zm.x = drag.x0 + dx; drag.zm.y = drag.y0 + dy;
+        for (const [o, x, y] of [...drag.nodes, ...drag.zs]) { o.x = x + dx; o.y = y + dy; }
+        draw(); return;
+      } drag.n.x = Math.max(0, Math.min(W - BW, Math.round((p.x - drag.dx) / 10) * 10)); drag.n.y = Math.max(0, Math.min(H - BH, Math.round((p.y - drag.dy) / 10) * 10)); draw(); };
     const up = () => { if (drag) { drag = null; save(); } };
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
-    svg.addEventListener('dblclick', e => { const ng = e.target.closest('.ed-n'), eg = e.target.closest('.ed-e'); if (ng) sel = { kind: 'n', id: ng.dataset.n }; else if (eg) sel = { kind: 'e', id: eg.dataset.e }; else return; rename(); });
+    svg.addEventListener('dblclick', e => { const ng = e.target.closest('.ed-n'), eg = e.target.closest('.ed-e'), zg = e.target.closest('.ed-z'); if (ng) sel = { kind: 'n', id: ng.dataset.n }; else if (eg) sel = { kind: 'e', id: eg.dataset.e }; else if (zg) sel = { kind: 'g', id: zg.dataset.z }; else return; rename(); });
     const onKey = e => { if (!document.body.contains(root)) { document.removeEventListener('keydown', onKey); return; } if ((e.key === 'Delete' || e.key === 'Backspace') && sel && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); del(); } };
     document.addEventListener('keydown', onKey);
     draw();

@@ -110,7 +110,7 @@ code{overflow-wrap:anywhere}
 .eb{border:1px solid var(--line);border-radius:8px}
 .eb:disabled{opacity:.4;cursor:default}
 .ed-hint{color:var(--muted);font-size:13px;margin-left:auto}
-.ed-pal{padding:6px 12px;border-bottom:1px solid var(--line);max-height:190px;overflow-y:auto}
+.ed-pal{padding:6px 12px;border-bottom:1px solid var(--line);max-height:250px;overflow-y:auto;resize:vertical}
 .ed-pal .chips{margin:2px 0 6px}
 .ed-pal .chip{font-size:13px;padding:3px 10px}
 .ed-wrap{overflow:auto;background:var(--bg)}

@@ -75,7 +75,7 @@ const Quiz = {
     const cats = Object.keys(CATS).filter(k => k !== 'cliente');
     root.innerHTML = `<p>Marca los servicios que pondrías en tu diagrama y luego presiona <b>Revisar</b>.</p>`
       + cats.map(c => `<div><small style="color:var(--muted)"><span class="cat" style="background:${CATS[c].color}"></span>${CATS[c].name}</small><div class="chips">`
-        + SERVICES.filter(s => s.cat === c).map(s => `<button class="chip pk" data-id="${s.id}">${s.name}</button>`).join('') + '</div></div>').join('')
+        + SERVICES.filter(s => s.cat === c && !s.nopal).map(s => `<button class="chip pk" data-id="${s.id}">${s.name}</button>`).join('') + '</div></div>').join('')
       + `<div class="row"><button class="btn chk">Revisar</button><button class="btn ghost rst">Reiniciar</button></div><div class="res"></div>`;
     root.querySelectorAll('.pk').forEach(b => b.addEventListener('click', () => {
       if (chosen.has(b.dataset.id)) chosen.delete(b.dataset.id); else chosen.add(b.dataset.id);
