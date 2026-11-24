@@ -6,6 +6,7 @@ const Editor = (() => {
   const short = n => n.replace(/^(Amazon|AWS) /, '');
   const typeName = t => t === 'actor' ? 'Actor' : SVC[t].name;
   const catOf = t => t === 'actor' ? 'cliente' : SVC[t].cat;
+  const dims = (model, n) => { const k = (model.ns || 1) * (n.s || 1); return [BW * k, BH * k, k]; };
   const ENTRADAS = ['apigw', 'kinesis', 's3', 'amplify', 'appsync', 'cognito', 'route53', 'eventbridge'];
 
   function wrap(text, max) {
@@ -18,7 +19,7 @@ const Editor = (() => {
   function grade(model, caseId) {
     const G = caseId ? GRADING[caseId] : null, cs = caseId ? findCase(caseId) : null;
     const groups = model.groups || [];
-    const center = n => [n.x + BW / 2, n.y + BH / 2];
+    const center = n => { const [w, h] = dims(model, n); return [n.x + w / 2, n.y + h / 2]; };
     const inZone = (n, kind) => { const [cx, cy] = center(n); const kinds = kind === 'vpc' ? ['vpc', 'pub', 'priv'] : [kind]; return groups.some(g => kinds.includes(g.kind) && cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h); };
     const byId = Object.fromEntries(model.nodes.map(n => [n.id, n]));
     const E = model.edges.map(e => ({ ...e, ft: byId[e.from]?.type, tt: byId[e.to]?.type })).filter(e => e.ft && e.tt);
@@ -109,21 +110,53 @@ const Editor = (() => {
   }
 
   /* ───── editor ───── */
+  const ES = { straight: '╱ Recta', curve: '∿ Curva', ortho: '┐ Ortogonal' };
+
+  /* Recorrido de una flecha entre dos nodos según el estilo */
+  function route(A, B, style) {
+    const [ax, ay, aw, ah] = A, [bx, by, bw, bh] = B;
+    const acx = ax + aw / 2, acy = ay + ah / 2, bcx = bx + bw / 2, bcy = by + bh / 2, dx = bcx - acx, dy = bcy - acy;
+    if (style === 'straight') {
+      const bd = (cx, cy, w, h, tx, ty) => { const ddx = tx - cx, ddy = ty - cy; if (!ddx && !ddy) return [cx, cy]; const k = Math.min(ddx ? (w / 2 + 4) / Math.abs(ddx) : 1e9, ddy ? (h / 2 + 4) / Math.abs(ddy) : 1e9); return [cx + ddx * k, cy + ddy * k]; };
+      const [x1, y1] = bd(acx, acy, aw, ah, bcx, bcy), [x2, y2] = bd(bcx, bcy, bw, bh, acx, acy);
+      return { d: `M${x1},${y1} L${x2},${y2}`, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 6 };
+    }
+    // ¿se conectan por los lados (horizontal) o por arriba/abajo (vertical)?
+    const horiz = Math.abs(dx) - (aw + bw) / 2 >= Math.abs(dy) - (ah + bh) / 2;
+    let x1, y1, x2, y2;
+    if (horiz) { const sg = Math.sign(dx) || 1; x1 = acx + sg * (aw / 2 + 2); y1 = acy; x2 = bcx - sg * (bw / 2 + 4); y2 = bcy; }
+    else { const sg = Math.sign(dy) || 1; x1 = acx; y1 = acy + sg * (ah / 2 + 2); x2 = bcx; y2 = bcy - sg * (bh / 2 + 4); }
+    if (style === 'curve') {
+      const k = horiz ? Math.max(40, Math.abs(x2 - x1) / 2) * Math.sign(x2 - x1 || 1) : Math.max(40, Math.abs(y2 - y1) / 2) * Math.sign(y2 - y1 || 1);
+      const c1 = horiz ? [x1 + k, y1] : [x1, y1 + k], c2 = horiz ? [x2 - k, y2] : [x2, y2 - k];
+      return { d: `M${x1},${y1} C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${x2},${y2}`, lx: (x1 + 3 * c1[0] + 3 * c2[0] + x2) / 8, ly: (y1 + 3 * c1[1] + 3 * c2[1] + y2) / 8 - 6 };
+    }
+    if (horiz) { const mx = (x1 + x2) / 2; return { d: `M${x1},${y1} H${mx} V${y2} H${x2}`, lx: mx, ly: (y1 + y2) / 2 - 6 }; }
+    const my = (y1 + y2) / 2; return { d: `M${x1},${y1} V${my} H${x2} V${y2}`, lx: (x1 + x2) / 2, ly: my - 6 };
+  }
+
   function mount(root, opts = {}) {
     const key = 'ed:' + (opts.key || opts.caseId || 'libre');
     let model = Store.get(key, null) || { nodes: [], edges: [] };
     model.groups = model.groups || [];
     let mode = 'move', sel = null, pending = null, seq = Date.now();
+    let vb = { x: 0, y: 0, w: W, h: H };
     const save = () => Store.set(key, model);
 
     const cats = Object.keys(CATS);
     root.innerHTML = `<div class="ed">
       <div class="ed-bar">
-        <div class="seg"><button data-m="move" class="on" title="Mover y seleccionar">✋ Mover</button><button data-m="connect" title="Clic en el origen y luego en el destino">➜ Conectar</button></div>
+        <div class="seg"><button data-m="move" class="on" title="Mover y seleccionar · arrastra el fondo para desplazar la vista">✋ Mover</button><button data-m="connect" title="Clic en el origen y luego en el destino">➜ Conectar</button></div>
         <button class="eb" data-a="rename" title="Renombrar el nodo o la flecha seleccionada (o doble clic)">✎ Renombrar</button>
         <button class="eb" data-a="del" title="Borrar lo seleccionado (tecla Supr)">🗑 Borrar</button>
         <button class="eb" data-a="clear">Limpiar todo</button>
         <span class="ed-hint"></span>
+      </div>
+      <div class="ed-bar ed-bar2">
+        <span class="ed-lbl">Flechas</span><div class="seg es">${Object.entries(ES).map(([k, v]) => `<button data-es="${k}" title="${k === 'ortho' ? 'En ángulo recto: sale por el lado más cercano según la posición de cada servicio' : k === 'curve' ? 'Curva que se estira entre los servicios' : 'Línea recta'}">${v}</button>`).join('')}</div>
+        <span class="ed-lbl">Tamaño</span><button class="eb" data-a="sm" title="Achicar (el nodo seleccionado o todos)">A−</button><span class="ed-val" id="ed-sz"></span><button class="eb" data-a="sp" title="Agrandar (el nodo seleccionado o todos)">A+</button>
+        <span class="ed-lbl">Zoom</span><button class="eb" data-a="zo" title="Alejar">−</button><button class="eb ed-val" data-a="z1" title="Volver a 100%" id="ed-zm">100%</button><button class="eb" data-a="zi" title="Acercar">+</button><button class="eb" data-a="fit" title="Encuadrar todo el diagrama">⤢ Ajustar</button>
+        <span class="ed-hint2"></span>
       </div>
       <div class="ed-pal"><div class="pg"><small>▢ Zonas (arrástralas por el título y cambia su tamaño desde la esquina inferior derecha)</small><div class="chips">${['cloud', 'vpc', 'pub', 'priv', 'onprem'].map(k => `<button class="chip pz" data-z="${k}" style="border-color:${ZONES[k].stroke}">+ ${ZONES[k].name}</button>`).join('')}</div></div>${cats.map(c => `<div class="pg"><small><span class="cat" style="background:${CATS[c].color}"></span>${CATS[c].name}</small><div class="chips">`
         + (c === 'cliente' ? `<button class="chip pa" data-t="actor">+ Actor (usuario, sensor, tablet…)</button>` : SERVICES.filter(s => s.cat === c && !s.nopal).map(s => `<button class="chip pa" data-t="${s.id}">+ ${short(s.name)}</button>`).join(''))
@@ -132,18 +165,29 @@ const Editor = (() => {
         <defs><marker id="ed-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker>
         <marker id="ed-ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)"/></marker>
         <pattern id="ed-grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" style="fill:var(--line)"/></pattern></defs>
-        <rect class="ed-bg" width="${W}" height="${H}" fill="url(#ed-grid)"/><g class="ed-g"></g></svg></div>
+        <rect class="ed-bg" x="-4000" y="-4000" width="12000" height="12000" fill="url(#ed-grid)"/><g class="ed-g"></g></svg></div>
     </div>`;
-    const svg = root.querySelector('.ed-svg'), g = root.querySelector('.ed-g'), hint = root.querySelector('.ed-hint');
-    const setHint = () => hint.textContent = mode === 'connect' ? (pending ? 'Ahora haz clic en el destino…' : 'Haz clic en el nodo de origen') : (model.nodes.length ? 'Arrastra para mover · doble clic para renombrar' : 'Agrega servicios desde la paleta de arriba');
+    const svg = root.querySelector('.ed-svg'), g = root.querySelector('.ed-g'), hint = root.querySelector('.ed-hint'), hint2 = root.querySelector('.ed-hint2');
+    const setHint = () => hint.textContent = mode === 'connect' ? (pending ? 'Ahora haz clic en el destino…' : 'Haz clic en el nodo de origen') : (model.nodes.length ? 'Arrastra para mover · doble clic para renombrar · arrastra el fondo para desplazar' : 'Agrega servicios desde la paleta de abajo');
+    const D = n => { const [w, h, k] = dims(model, n); return [n.x, n.y, w, h, k]; };
+    const edgeStyle = e => e.style || model.es || 'straight';
+
+    /* ── vista (zoom y desplazamiento) ── */
+    const applyVB = () => { svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); root.querySelector('#ed-zm').textContent = Math.round(100 * W / vb.w) + '%'; };
+    const zoomAt = (f, cx, cy) => {
+      const nw = Math.min(W * 4, Math.max(W / 5, vb.w / f)), nh = nw * H / W;
+      if (cx == null) { cx = vb.x + vb.w / 2; cy = vb.y + vb.h / 2; }
+      vb = { x: cx - (cx - vb.x) * nw / vb.w, y: cy - (cy - vb.y) * nh / vb.h, w: nw, h: nh }; applyVB();
+    };
+    const fit = () => {
+      const boxes = [...model.nodes.map(n => { const [x, y, w, h] = D(n); return [x, y, x + w, y + h]; }), ...model.groups.map(z => [z.x, z.y, z.x + z.w, z.y + z.h])];
+      if (!boxes.length) { vb = { x: 0, y: 0, w: W, h: H }; applyVB(); return; }
+      const x0 = Math.min(...boxes.map(b => b[0])) - 40, y0 = Math.min(...boxes.map(b => b[1])) - 40, x1 = Math.max(...boxes.map(b => b[2])) + 40, y1 = Math.max(...boxes.map(b => b[3])) + 40;
+      let w = Math.max(x1 - x0, (y1 - y0) * W / H, W / 4), h = w * H / W;
+      vb = { x: (x0 + x1) / 2 - w / 2, y: (y0 + y1) / 2 - h / 2, w, h }; applyVB();
+    };
 
     const pt = e => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
-    const border = (n, tx, ty) => {
-      const cx = n.x + BW / 2, cy = n.y + BH / 2, dx = tx - cx, dy = ty - cy;
-      if (!dx && !dy) return [cx, cy];
-      const s = Math.min(dx ? (BW / 2 + 4) / Math.abs(dx) : 1e9, dy ? (BH / 2 + 4) / Math.abs(dy) : 1e9);
-      return [cx + dx * s, cy + dy * s];
-    };
 
     function draw() {
       const byId = Object.fromEntries(model.nodes.map(n => [n.id, n]));
@@ -158,38 +202,46 @@ const Editor = (() => {
       }
       for (const e of model.edges) {
         const a = byId[e.from], b = byId[e.to]; if (!a || !b) continue;
-        const [x1, y1] = border(a, b.x + BW / 2, b.y + BH / 2), [x2, y2] = border(b, a.x + BW / 2, a.y + BH / 2);
+        const r = route(D(a), D(b), edgeStyle(e));
         const on = sel && sel.kind === 'e' && sel.id === e.id;
-        s += `<g class="ed-e" data-e="${e.id}"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:transparent;stroke-width:14"/>`
-          + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${on ? 'var(--accent)' : 'var(--muted)'};stroke-width:${on ? 2.5 : 1.6}" marker-end="url(#${on ? 'ed-ahs' : 'ed-ah'})"/>`;
-        if (e.label) wrap(e.label, 18).forEach((ln, i, arr) => s += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 - 6 - (arr.length - 1 - i) * 12}" text-anchor="middle" style="fill:var(--ink);font-size:11px;paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round">${esc(ln)}</text>`);
+        s += `<g class="ed-e" data-e="${e.id}"><path d="${r.d}" style="fill:none;stroke:transparent;stroke-width:14"/>`
+          + `<path d="${r.d}" style="fill:none;stroke:${on ? 'var(--accent)' : 'var(--muted)'};stroke-width:${on ? 2.5 : 1.6}" marker-end="url(#${on ? 'ed-ahs' : 'ed-ah'})"/>`;
+        if (e.label) wrap(e.label, 18).forEach((ln, i, arr) => s += `<text x="${r.lx}" y="${r.ly - (arr.length - 1 - i) * 12}" text-anchor="middle" style="fill:var(--ink);font-size:11px;paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round">${esc(ln)}</text>`);
         s += '</g>';
       }
       for (const n of model.nodes) {
+        const [x, y, w, h, k] = D(n);
         const c = CATS[catOf(n.type)].color, on = sel && sel.kind === 'n' && sel.id === n.id, pen = pending === n.id;
         const main = wrap(n.label, 20), sub = n.type !== 'actor' && n.label !== short(SVC[n.type].name) ? [short(SVC[n.type].name)] : [];
-        const tot = main.length * 14 + sub.length * 12; let ty = n.y + BH / 2 - tot / 2 + 11;
+        const f1 = 12 * k, f2 = 10 * k, tot = main.length * f1 * 1.15 + sub.length * f2 * 1.2; let ty = y + h / 2 - tot / 2 + f1 * 0.9;
         s += `<g class="ed-n" data-n="${n.id}" style="cursor:${mode === 'connect' ? 'crosshair' : 'grab'};touch-action:none">`
-          + (on || pen ? `<rect x="${n.x - 5}" y="${n.y - 5}" width="${BW + 10}" height="${BH + 10}" rx="11" style="fill:none;stroke:var(--accent);stroke-width:2;${pen ? 'stroke-dasharray:5 4' : ''}"/>` : '')
-          + `<rect x="${n.x}" y="${n.y}" width="${BW}" height="${BH}" rx="8" style="fill:var(--card);stroke:${c};stroke-width:2"/><rect x="${n.x}" y="${n.y}" width="6" height="${BH}" rx="3" style="fill:${c}"/>`;
-        for (const ln of main) { s += `<text x="${n.x + BW / 2 + 3}" y="${ty}" text-anchor="middle" style="fill:var(--ink);font-size:12px;font-weight:600;pointer-events:none">${esc(ln)}</text>`; ty += 14; }
-        for (const ln of sub) { s += `<text x="${n.x + BW / 2 + 3}" y="${ty}" text-anchor="middle" style="fill:var(--muted);font-size:10px;pointer-events:none">${esc(ln)}</text>`; ty += 12; }
+          + (on || pen ? `<rect x="${x - 5}" y="${y - 5}" width="${w + 10}" height="${h + 10}" rx="11" style="fill:none;stroke:var(--accent);stroke-width:2;${pen ? 'stroke-dasharray:5 4' : ''}"/>` : '')
+          + `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${8 * k}" style="fill:var(--card);stroke:${c};stroke-width:2"/><rect x="${x}" y="${y}" width="${6 * k}" height="${h}" rx="${3 * k}" style="fill:${c}"/>`;
+        for (const ln of main) { s += `<text x="${x + w / 2 + 3 * k}" y="${ty}" text-anchor="middle" style="fill:var(--ink);font-size:${f1}px;font-weight:600;pointer-events:none">${esc(ln)}</text>`; ty += f1 * 1.15; }
+        for (const ln of sub) { s += `<text x="${x + w / 2 + 3 * k}" y="${ty}" text-anchor="middle" style="fill:var(--muted);font-size:${f2}px;pointer-events:none">${esc(ln)}</text>`; ty += f2 * 1.2; }
         s += '</g>';
       }
       g.innerHTML = s; setHint();
       root.querySelector('[data-a="del"]').disabled = root.querySelector('[data-a="rename"]').disabled = !sel;
+      // controles que dependen de la selección
+      const selE = sel && sel.kind === 'e' ? model.edges.find(x => x.id === sel.id) : null, selN = sel && sel.kind === 'n' ? model.nodes.find(x => x.id === sel.id) : null;
+      const curES = selE ? edgeStyle(selE) : (model.es || 'straight');
+      root.querySelectorAll('.es button').forEach(b => b.classList.toggle('on', b.dataset.es === curES));
+      root.querySelector('#ed-sz').textContent = Math.round(100 * (selN ? (model.ns || 1) * (selN.s || 1) : (model.ns || 1))) + '%';
+      hint2.textContent = selE ? 'El tipo de flecha se aplica solo a la flecha seleccionada' : selN ? 'El tamaño se aplica solo al nodo seleccionado' : 'Sin selección: el tipo de flecha y el tamaño se aplican a todo';
     }
 
     function addNode(type) {
       let label = type === 'actor' ? prompt('¿Quién es? (ej. Paciente, Sensores del camión, Tablet)', 'Usuario') : short(SVC[type].name);
       if (label == null || !label.trim()) return;
-      const k = model.nodes.length, x = 40 + (k % 6) * 185, y = 40 + Math.floor(k / 6) * 105 % (H - 100);
+      const k = model.nodes.length, sc = vb.w / W;
+      const x = Math.round((vb.x + (40 + (k % 5) * 190) * sc) / 10) * 10, y = Math.round((vb.y + (40 + (Math.floor(k / 5) % 6) * 110) * sc) / 10) * 10;
       const n = { id: 'n' + (seq++), type, label: label.trim(), x, y };
       model.nodes.push(n); sel = { kind: 'n', id: n.id }; save(); draw();
     }
     function addZone(kind) {
       const k = model.groups.length, big = { cloud: [1200, 820], vpc: [900, 600], onprem: [260, 260] }[kind] || [380, 300];
-      const z = { id: 'z' + (seq++), kind, label: ZONES[kind].name, x: 20 + (k % 4) * 30, y: 20 + (k % 4) * 30, w: big[0], h: big[1] };
+      const z = { id: 'z' + (seq++), kind, label: ZONES[kind].name, x: Math.round(vb.x + 20 + (k % 4) * 30), y: Math.round(vb.y + 20 + (k % 4) * 30), w: big[0], h: big[1] };
       model.groups.push(z); sel = { kind: 'g', id: z.id }; save(); draw();
     }
     function rename() {
@@ -206,26 +258,44 @@ const Editor = (() => {
       else model.edges = model.edges.filter(e => e.id !== sel.id);
       sel = null; save(); draw();
     }
+    function resize(f) {
+      const n = sel && sel.kind === 'n' ? model.nodes.find(x => x.id === sel.id) : null;
+      if (n) n.s = Math.min(2, Math.max(0.5, Math.round(((n.s || 1) * f) * 100) / 100));
+      else model.ns = Math.min(2, Math.max(0.5, Math.round(((model.ns || 1) * f) * 100) / 100));
+      save(); draw();
+    }
 
     root.querySelectorAll('.pa').forEach(b => b.addEventListener('click', () => addNode(b.dataset.t)));
     root.querySelectorAll('.pz').forEach(b => b.addEventListener('click', () => addZone(b.dataset.z)));
-    root.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
-      mode = b.dataset.m; pending = null; root.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b)); draw();
+    root.querySelectorAll('.seg button[data-m]').forEach(b => b.addEventListener('click', () => {
+      mode = b.dataset.m; pending = null; root.querySelectorAll('.seg button[data-m]').forEach(x => x.classList.toggle('on', x === b)); draw();
     }));
+    root.querySelectorAll('.es button').forEach(b => b.addEventListener('click', () => {
+      const selE = sel && sel.kind === 'e' ? model.edges.find(x => x.id === sel.id) : null;
+      if (selE) selE.style = b.dataset.es; else { model.es = b.dataset.es; model.edges.forEach(e => delete e.style); }
+      save(); draw();
+    }));
+    root.querySelector('[data-a="sm"]').addEventListener('click', () => resize(1 / 1.15));
+    root.querySelector('[data-a="sp"]').addEventListener('click', () => resize(1.15));
+    root.querySelector('[data-a="zi"]').addEventListener('click', () => zoomAt(1.25));
+    root.querySelector('[data-a="zo"]').addEventListener('click', () => zoomAt(1 / 1.25));
+    root.querySelector('[data-a="z1"]').addEventListener('click', () => { const cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2; vb = { x: cx - W / 2, y: cy - H / 2, w: W, h: H }; applyVB(); });
+    root.querySelector('[data-a="fit"]').addEventListener('click', fit);
     root.querySelector('[data-a="rename"]').addEventListener('click', rename);
     root.querySelector('[data-a="del"]').addEventListener('click', del);
-    root.querySelector('[data-a="clear"]').addEventListener('click', () => { if ((model.nodes.length || model.groups.length) && confirm('¿Borrar todo el diagrama?')) { model = { nodes: [], edges: [], groups: [] }; sel = pending = null; save(); draw(); } });
+    root.querySelector('[data-a="clear"]').addEventListener('click', () => { if ((model.nodes.length || model.groups.length) && confirm('¿Borrar todo el diagrama?')) { model = { nodes: [], edges: [], groups: [] }; sel = pending = null; save(); draw(); fit(); } });
+    svg.addEventListener('wheel', e => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); const p = pt(e); zoomAt(Math.exp(-e.deltaY * 0.01), p.x, p.y); }, { passive: false });
 
     let drag = null;
     svg.addEventListener('pointerdown', e => {
       const ng = e.target.closest('.ed-n'), eg = e.target.closest('.ed-e'), zg = e.target.closest('.ed-z');
-      if (zg && !ng && mode === 'move') {
+      if (zg && !ng && mode === 'move' && (e.target.classList.contains('ed-zr') || e.target.classList.contains('ed-zh'))) {
         const z = model.groups.find(x => x.id === zg.dataset.z), p = pt(e);
         sel = { kind: 'g', id: z.id };
         if (e.target.classList.contains('ed-zr')) drag = { zr: z, sx: p.x, sy: p.y, w0: z.w, h0: z.h };
-        else if (e.target.classList.contains('ed-zh')) {
+        else {
           const inside = (x, y) => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h;
-          const nodes = model.nodes.filter(n => inside(n.x + BW / 2, n.y + BH / 2)).map(n => [n, n.x, n.y]);
+          const nodes = model.nodes.filter(n => { const [x, y, w, h] = D(n); return inside(x + w / 2, y + h / 2); }).map(n => [n, n.x, n.y]);
           const zs = model.groups.filter(o => o !== z && inside(o.x, o.y) && inside(o.x + o.w, o.y + o.h)).map(o => [o, o.x, o.y]);
           drag = { zm: z, sx: p.x, sy: p.y, x0: z.x, y0: z.y, nodes, zs };
         }
@@ -249,26 +319,32 @@ const Editor = (() => {
         drag = { n, dx: p.x - n.x, dy: p.y - n.y }; e.preventDefault(); draw(); return;
       }
       if (eg) { sel = { kind: 'e', id: eg.dataset.e }; draw(); return; }
+      // fondo: deselecciona y desplaza la vista
       sel = null; pending = null; draw();
+      if (mode === 'move') { drag = { pan: true, sx: e.clientX, sy: e.clientY, vx: vb.x, vy: vb.y }; e.preventDefault(); }
     });
     const snap = v => Math.round(v / 10) * 10;
     const move = e => {
-      if (!drag) return; const p = pt(e);
+      if (!drag) return;
+      if (drag.pan) { const k = vb.w / svg.clientWidth; vb.x = drag.vx - (e.clientX - drag.sx) * k; vb.y = drag.vy - (e.clientY - drag.sy) * k; applyVB(); return; }
+      const p = pt(e);
       if (drag.zr) { drag.zr.w = Math.max(160, snap(drag.w0 + p.x - drag.sx)); drag.zr.h = Math.max(100, snap(drag.h0 + p.y - drag.sy)); draw(); return; }
       if (drag.zm) {
         const dx = snap(p.x - drag.sx), dy = snap(p.y - drag.sy);
         drag.zm.x = drag.x0 + dx; drag.zm.y = drag.y0 + dy;
         for (const [o, x, y] of [...drag.nodes, ...drag.zs]) { o.x = x + dx; o.y = y + dy; }
         draw(); return;
-      } drag.n.x = Math.max(0, Math.min(W - BW, Math.round((p.x - drag.dx) / 10) * 10)); drag.n.y = Math.max(0, Math.min(H - BH, Math.round((p.y - drag.dy) / 10) * 10)); draw(); };
-    const up = () => { if (drag) { drag = null; save(); } };
+      }
+      drag.n.x = snap(p.x - drag.dx); drag.n.y = snap(p.y - drag.dy); draw();
+    };
+    const up = () => { if (drag) { if (!drag.pan) save(); drag = null; } };
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
     svg.addEventListener('dblclick', e => { const ng = e.target.closest('.ed-n'), eg = e.target.closest('.ed-e'), zg = e.target.closest('.ed-z'); if (ng) sel = { kind: 'n', id: ng.dataset.n }; else if (eg) sel = { kind: 'e', id: eg.dataset.e }; else if (zg) sel = { kind: 'g', id: zg.dataset.z }; else return; rename(); });
     const onKey = e => { if (!document.body.contains(root)) { document.removeEventListener('keydown', onKey); return; } if ((e.key === 'Delete' || e.key === 'Backspace') && sel && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); del(); } };
     document.addEventListener('keydown', onKey);
     draw();
+    if (model.nodes.length || model.groups.length) fit(); else applyVB();
     return { grade: () => grade(model, opts.caseId), model: () => model, renderGrade };
   }
-
   return { mount, grade, renderGrade };
 })();

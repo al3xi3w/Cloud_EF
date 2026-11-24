@@ -122,3 +122,8 @@ code{overflow-wrap:anywhere}
 .stk b{display:block;margin-bottom:4px}
 .stk-row{display:flex;gap:4px;margin:3px 0}
 .stk-row span{flex:1;text-align:center;padding:5px 4px;border-radius:5px;background:color-mix(in srgb,var(--c) 30%,var(--card));border:1px solid var(--c);color:var(--ink);font-weight:600}
+.ed-bar2{gap:6px;padding:6px 12px;background:color-mix(in srgb,var(--code) 50%,transparent)}
+.ed-lbl{font-size:12px;color:var(--muted);margin-left:6px}
+.ed-val{font-size:13px;min-width:46px;text-align:center;font-variant-numeric:tabular-nums}
+.ed-hint2{color:var(--muted);font-size:12px;margin-left:auto}
+.ed-svg{cursor:default}
