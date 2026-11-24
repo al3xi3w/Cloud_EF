@@ -127,3 +127,6 @@ code{overflow-wrap:anywhere}
 .ed-val{font-size:13px;min-width:46px;text-align:center;font-variant-numeric:tabular-nums}
 .ed-hint2{color:var(--muted);font-size:12px;margin-left:auto}
 .ed-svg{cursor:default}
+/* íconos de AWS */
+.chip-ic{width:18px;height:18px;vertical-align:-4px;margin-right:5px;background:#fff;border-radius:3px;padding:1px}
+.svc-ic{width:34px;height:34px;background:#fff;border-radius:6px;padding:2px}

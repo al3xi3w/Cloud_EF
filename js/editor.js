@@ -158,8 +158,8 @@ const Editor = (() => {
         <span class="ed-lbl">Zoom</span><button class="eb" data-a="zo" title="Alejar">−</button><button class="eb ed-val" data-a="z1" title="Volver a 100%" id="ed-zm">100%</button><button class="eb" data-a="zi" title="Acercar">+</button><button class="eb" data-a="fit" title="Encuadrar todo el diagrama">⤢ Ajustar</button>
         <span class="ed-hint2"></span>
       </div>
-      <div class="ed-pal"><div class="pg"><small>▢ Zonas (arrástralas por el título y cambia su tamaño desde la esquina inferior derecha)</small><div class="chips">${['cloud', 'vpc', 'pub', 'priv', 'onprem'].map(k => `<button class="chip pz" data-z="${k}" style="border-color:${ZONES[k].stroke}">+ ${ZONES[k].name}</button>`).join('')}</div></div>${cats.map(c => `<div class="pg"><small><span class="cat" style="background:${CATS[c].color}"></span>${CATS[c].name}</small><div class="chips">`
-        + (c === 'cliente' ? `<button class="chip pa" data-t="actor">+ Actor (usuario, sensor, tablet…)</button>` : SERVICES.filter(s => s.cat === c && !s.nopal).map(s => `<button class="chip pa" data-t="${s.id}">+ ${short(s.name)}</button>`).join(''))
+      <div class="ed-pal"><div class="pg"><small>▢ Zonas (arrástralas por el título y cambia su tamaño desde la esquina inferior derecha)</small><div class="chips">${['cloud', 'vpc', 'pub', 'priv', 'onprem'].map(k => `<button class="chip pz" data-z="${k}" style="border-color:${ZONES[k].stroke}">${iconImg('z-' + k, 'chip-ic')}${ZONES[k].name}</button>`).join('')}</div></div>${cats.map(c => `<div class="pg"><small><span class="cat" style="background:${CATS[c].color}"></span>${CATS[c].name}</small><div class="chips">`
+        + (c === 'cliente' ? `<button class="chip pa" data-t="actor">${iconImg('u-user', 'chip-ic')}Actor (usuario, sensor, tablet…)</button>` : SERVICES.filter(s => s.cat === c && !s.nopal).map(s => `<button class="chip pa" data-t="${s.id}">${iconImg(iconFor(s.id), 'chip-ic')}${short(s.name)}</button>`).join(''))
         + `</div></div>`).join('')}</div>
       <div class="ed-wrap"><svg class="ed-svg" viewBox="0 0 ${W} ${H}">
         <defs><marker id="ed-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker>
@@ -197,7 +197,8 @@ const Editor = (() => {
         const st = ZONES[z.kind], on = sel && sel.kind === 'g' && sel.id === z.id;
         s += `<g class="ed-z" data-z="${z.id}"><rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="10" style="fill:${st.fill};stroke:${on ? 'var(--accent)' : st.stroke};stroke-width:${on ? 2.5 : 1.5};${st.dash ? 'stroke-dasharray:6 4;' : ''}pointer-events:none"/>`
           + `<rect class="ed-zh" x="${z.x}" y="${z.y}" width="${z.w}" height="22" rx="10" style="fill:transparent;cursor:move;touch-action:none"/>`
-          + `<text x="${z.x + 10}" y="${z.y + 15}" style="fill:${st.stroke};font-size:12px;font-weight:700;pointer-events:none">${esc(z.label)}</text>`
+          + `<image href="${ICON_DIR}z-${z.kind}.svg" x="${z.x + 2}" y="${z.y + 2}" width="20" height="20" style="pointer-events:none"/>`
+          + `<text x="${z.x + 28}" y="${z.y + 16}" style="fill:${st.stroke};font-size:12px;font-weight:700;pointer-events:none">${esc(z.label)}</text>`
           + `<rect class="ed-zr" x="${z.x + z.w - 14}" y="${z.y + z.h - 14}" width="14" height="14" rx="3" style="fill:${st.stroke};opacity:.6;cursor:nwse-resize;touch-action:none"/></g>`;
       }
       for (const e of model.edges) {
@@ -212,13 +213,17 @@ const Editor = (() => {
       for (const n of model.nodes) {
         const [x, y, w, h, k] = D(n);
         const c = CATS[catOf(n.type)].color, on = sel && sel.kind === 'n' && sel.id === n.id, pen = pending === n.id;
-        const main = wrap(n.label, 20), sub = n.type !== 'actor' && n.label !== short(SVC[n.type].name) ? [short(SVC[n.type].name)] : [];
-        const f1 = 12 * k, f2 = 10 * k, tot = main.length * f1 * 1.15 + sub.length * f2 * 1.2; let ty = y + h / 2 - tot / 2 + f1 * 0.9;
+        const ic = iconFor(n.type, n.label), isz = 30 * k;
+        const avail = ic ? w - 56 * k : w - 14 * k;
+        const main = wrap(ic ? dropLambda(n.label, ic) : n.label, ic ? 14 : 20), sub = n.type !== 'actor' && n.label !== short(SVC[n.type].name) ? [short(SVC[n.type].name)] : [];
+        const tx = ic ? x + 48 * k + (w - 52 * k) / 2 : x + w / 2 + 3 * k;
+        const f1 = (ic ? 11.5 : 12) * k, f2 = (ic ? 9.5 : 10) * k, tot = main.length * f1 * 1.15 + sub.length * f2 * 1.2; let ty = y + h / 2 - tot / 2 + f1 * 0.9;
         s += `<g class="ed-n" data-n="${n.id}" style="cursor:${mode === 'connect' ? 'crosshair' : 'grab'};touch-action:none">`
           + (on || pen ? `<rect x="${x - 5}" y="${y - 5}" width="${w + 10}" height="${h + 10}" rx="11" style="fill:none;stroke:var(--accent);stroke-width:2;${pen ? 'stroke-dasharray:5 4' : ''}"/>` : '')
-          + `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${8 * k}" style="fill:var(--card);stroke:${c};stroke-width:2"/><rect x="${x}" y="${y}" width="${6 * k}" height="${h}" rx="${3 * k}" style="fill:${c}"/>`;
-        for (const ln of main) { s += `<text x="${x + w / 2 + 3 * k}" y="${ty}" text-anchor="middle" style="fill:var(--ink);font-size:${f1}px;font-weight:600;pointer-events:none">${esc(ln)}</text>`; ty += f1 * 1.15; }
-        for (const ln of sub) { s += `<text x="${x + w / 2 + 3 * k}" y="${ty}" text-anchor="middle" style="fill:var(--muted);font-size:${f2}px;pointer-events:none">${esc(ln)}</text>`; ty += f2 * 1.2; }
+          + `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${8 * k}" style="fill:var(--card);stroke:${c};stroke-width:2"/><rect x="${x}" y="${y}" width="${6 * k}" height="${h}" rx="${3 * k}" style="fill:${c}"/>`
+          + iconSvg(ic, x + 13 * k, y + h / 2 - isz / 2, isz);
+        for (const ln of main) { s += `<text x="${tx}" y="${ty}" text-anchor="middle" style="fill:var(--ink);font-size:${fitFont(ln, avail, f1).toFixed(1)}px;font-weight:600;pointer-events:none">${esc(ln)}</text>`; ty += f1 * 1.15; }
+        for (const ln of sub) { s += `<text x="${tx}" y="${ty}" text-anchor="middle" style="fill:var(--muted);font-size:${fitFont(ln, avail, f2).toFixed(1)}px;pointer-events:none">${esc(ln)}</text>`; ty += f2 * 1.2; }
         s += '</g>';
       }
       g.innerHTML = s; setHint();

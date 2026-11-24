@@ -47,7 +47,9 @@ const Diagram = (() => {
       const w = (c2 - c1) * cw + BW + 2 * pad, h = (r2 - r1) * rh + BH + 2 * pad + 16;
       gMaxX = Math.max(gMaxX, x + w); gMaxY = Math.max(gMaxY, y + h);
       parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" style="fill:${st.fill};stroke:${st.stroke};stroke-width:${st.sw};${st.dash ? 'stroke-dasharray:6 4;' : ''}"/>`);
-      parts.push(`<text x="${x + 8}" y="${y + 13}" style="fill:${st.stroke};font-size:11px;font-weight:700">${esc(gl)}</text>`);
+      const zi = kind && typeof iconSvg === 'function' ? 'z-' + kind : null;
+      if (zi) parts.push(`<image href="${ICON_DIR}${zi}.svg" x="${x + 1}" y="${y + 1}" width="18" height="18"/>`);
+      parts.push(`<text x="${x + (zi ? 24 : 8)}" y="${y + 13}" style="fill:${st.stroke};font-size:11px;font-weight:700">${esc(gl)}</text>`);
     }
 
     // aristas
@@ -88,11 +90,15 @@ const Diagram = (() => {
       const c = col(n.cat);
       parts.push(`<g><rect x="${n.x}" y="${n.y}" width="${BW}" height="${BH}" rx="8" style="fill:var(--card);stroke:${c};stroke-width:2"/>`
         + `<rect x="${n.x}" y="${n.y}" width="6" height="${BH}" rx="3" style="fill:${c}"/>`);
-      const main = wrap(n.label, 20), sub = n.sub ? wrap(n.sub, 26) : [];
+      const ic = typeof labelIcon === 'function' ? labelIcon(n.label, n.cat) : null;
+      if (ic) parts.push(iconSvg(ic, n.x + 13, n.cy - 15, 30));
+      const tx = ic ? n.x + 48 + (BW - 52) / 2 : n.cx + 3;
+      const avail = ic ? BW - 56 : BW - 14;
+      const main = wrap(ic ? dropLambda(n.label, ic) : n.label, ic ? 14 : 20), sub = n.sub ? wrap(n.sub, ic ? 18 : 26) : [];
       const total = main.length * 14 + sub.length * 12;
       let ty = n.cy - total / 2 + 11;
-      for (const ln of main) { parts.push(`<text x="${n.cx + 3}" y="${ty}" text-anchor="middle" style="fill:var(--ink);font-size:12px;font-weight:600">${esc(ln)}</text>`); ty += 14; }
-      for (const ln of sub) { parts.push(`<text x="${n.cx + 3}" y="${ty}" text-anchor="middle" style="fill:var(--muted);font-size:10px">${esc(ln)}</text>`); ty += 12; }
+      for (const ln of main) { parts.push(`<text x="${tx}" y="${ty}" text-anchor="middle" style="fill:var(--ink);font-size:${fitFont(ln, avail, ic ? 11.5 : 12).toFixed(1)}px;font-weight:600">${esc(ln)}</text>`); ty += 14; }
+      for (const ln of sub) { parts.push(`<text x="${tx}" y="${ty}" text-anchor="middle" style="fill:var(--muted);font-size:${fitFont(ln, avail, ic ? 9.5 : 10).toFixed(1)}px">${esc(ln)}</text>`); ty += 12; }
       parts.push('</g>');
     }
 

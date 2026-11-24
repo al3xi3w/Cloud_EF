@@ -81,7 +81,7 @@ const GUIA = [
   ['No perder mensajes que fallaron', 'dlq', 'SV p.16'],
 ];
 function svcCard(s) {
-  return `<div class="card" id="svc-${s.id}"><div class="svc-h"><span class="cat" style="background:${CATS[s.cat].color};width:14px;height:14px"></span><h3>${s.name}</h3><span class="tag">${CATS[s.cat].name}</span>${s.fuera === 'general' ? '<span class="tag warn">fuera de las diapositivas · conocimiento general de AWS</span>' : s.fuera ? '<span class="tag warn">solo aparece en un diagrama</span>' : ''}</div>
+  return `<div class="card" id="svc-${s.id}"><div class="svc-h">${iconImg(iconFor(s.id), 'svc-ic') || `<span class="cat" style="background:${CATS[s.cat].color};width:14px;height:14px"></span>`}<h3>${s.name}</h3><span class="tag">${CATS[s.cat].name}</span>${s.fuera === 'general' ? '<span class="tag warn">fuera de las diapositivas · conocimiento general de AWS</span>' : s.fuera ? '<span class="tag warn">solo aparece en un diagrama</span>' : ''}</div>
   <p><b>¿Qué hace?</b> ${s.que}</p>${src(s.src)}
   <p><b>¿Cuándo usarlo?</b></p><ul>${s.cuando.map(c => `<li>${c}</li>`).join('')}</ul>
   ${s.datos ? `<p><b>Datos que pueden preguntar:</b></p><ul>${s.datos.map(c => `<li>${c}</li>`).join('')}</ul>` : ''}

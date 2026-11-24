@@ -105,7 +105,7 @@ Object.assign(DIAGRAMS, {
 });
 
 function examGuideHtml() {
-  const svcLink = id => SVC[id] ? `<a href="#/servicios" data-j="${id}"><span class="cat" style="background:${CATS[SVC[id].cat].color}"></span><b>${SVC[id].name}</b></a>` : id;
+  const svcLink = id => SVC[id] ? `<a href="#/servicios" data-j="${id}">${iconImg(iconFor(id), 'chip-ic')}<b>${SVC[id].name}</b></a>` : id;
   return `<h2>Guía para el examen: qué servicios usar y dónde dibujarlos</h2>
   <p>Armada a partir de las 3 preguntas del Examen Final (Prof. Santiago Silva). Todas piden un <b>diagrama 100% AWS</b> con VPC, subnets, VPC Endpoints, NAT, conexión on-premise y tablas DynamoDB con PK/SK.</p>
   <div class="note"><span class="tag warn">fuera de las diapositivas</span> Los servicios marcados así no están en <code>Clases/</code>: es conocimiento general de AWS. Los demás citan su diapositiva.</div>
